@@ -1,5 +1,9 @@
 /*
  * Copyright (C) 2006 The Android Open Source Project
+ * Copyright (c) 2011-12, Code Aurora Forum. All rights reserved.
+ *
+ * Not a Contribution, Apache license notifications and license are retained
+ * for attribution purposes only
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,13 +51,16 @@ public abstract class BaseCommands implements CommandsInterface {
     protected RegistrantList mOffOrNotAvailRegistrants = new RegistrantList();
     protected RegistrantList mNotAvailRegistrants = new RegistrantList();
     protected RegistrantList mCallStateRegistrants = new RegistrantList();
+    protected RegistrantList mDataCallListChangedRegistrants = new RegistrantList();
     protected RegistrantList mVoiceNetworkStateRegistrants = new RegistrantList();
     protected RegistrantList mDataNetworkStateRegistrants = new RegistrantList();
     protected RegistrantList mVoiceRadioTechChangedRegistrants = new RegistrantList();
+    protected RegistrantList mImsNetworkStateChangedRegistrants = new RegistrantList();
     protected RegistrantList mIccStatusChangedRegistrants = new RegistrantList();
     protected RegistrantList mVoicePrivacyOnRegistrants = new RegistrantList();
     protected RegistrantList mVoicePrivacyOffRegistrants = new RegistrantList();
     protected Registrant mUnsolOemHookRawRegistrant;
+    protected Registrant mUnsolOemHookExtAppRegistrant;
     protected RegistrantList mOtaProvisionRegistrants = new RegistrantList();
     protected RegistrantList mCallWaitingInfoRegistrants = new RegistrantList();
     protected RegistrantList mDisplayInfoRegistrants = new RegistrantList();
@@ -70,7 +77,12 @@ public abstract class BaseCommands implements CommandsInterface {
     protected RegistrantList mExitEmergencyCallbackModeRegistrants = new RegistrantList();
     protected RegistrantList mRilConnectedRegistrants = new RegistrantList();
     protected RegistrantList mIccRefreshRegistrants = new RegistrantList();
-
+    protected RegistrantList mCdmaFwdBurstDtmfRegistrants = new RegistrantList();
+    protected RegistrantList mCdmaFwdContDtmfStartRegistrants = new RegistrantList();
+    protected RegistrantList mCdmaFwdContDtmfStopRegistrants = new RegistrantList();
+    protected RegistrantList mQosStateChangedIndRegistrants = new RegistrantList();
+    protected RegistrantList mSubscriptionStatusRegistrants = new RegistrantList();
+    protected Registrant mSSRegistrant;
     protected Registrant mGsmSmsRegistrant;
     protected Registrant mCdmaSmsRegistrant;
     protected Registrant mNITZTimeRegistrant;
@@ -88,7 +100,41 @@ public abstract class BaseCommands implements CommandsInterface {
     protected Registrant mRingRegistrant;
     protected Registrant mRestrictedStateRegistrant;
     protected Registrant mGsmBroadcastSmsRegistrant;
+    protected RegistrantList mModifyCallRegistrants = new RegistrantList();
+    protected Registrant mCatCcAlphaRegistrant;
 
+    public void setOnSS(Handler paramHandler, int paramInt, Object paramObject)
+    {
+      this.mSSRegistrant = new Registrant(paramHandler, paramInt, paramObject);
+    }
+    
+    public void unSetOnSS(Handler paramHandler)
+    {
+      this.mSSRegistrant.clear();
+    }
+    
+    protected RegistrantList mTetheredModeStateRegistrants = new RegistrantList();
+    public void registerForTetheredModeStateChanged(Handler paramHandler, int paramInt, Object paramObject)
+    {
+      Registrant localRegistrant = new Registrant(paramHandler, paramInt, paramObject);
+      this.mTetheredModeStateRegistrants.add(localRegistrant);
+    }
+    public void unregisterForTetheredModeStateChanged(Handler paramHandler)
+    {
+      this.mTetheredModeStateRegistrants.remove(paramHandler);
+    }
+    
+    public void registerForModifyCall(Handler paramHandler, int paramInt, Object paramObject)
+    {
+      Registrant localRegistrant = new Registrant(paramHandler, paramInt, paramObject);
+      this.mModifyCallRegistrants.add(localRegistrant);
+    }
+
+    public void unregisterForModifyCall(Handler paramHandler)
+    {
+      this.mModifyCallRegistrants.remove(paramHandler);
+    }
+    
     // Preferred network type received from PhoneFactory.
     // This is used when establishing a connection to the
     // vendor ril so it starts up in the correct mode.
@@ -104,6 +150,17 @@ public abstract class BaseCommands implements CommandsInterface {
         mContext = context;  // May be null (if so we won't log statistics)
     }
 
+    public void unregisterForDataCallListChanged(Handler paramHandler)
+    {
+      this.mDataCallListChangedRegistrants.remove(paramHandler);
+    }
+    
+    public void registerForDataCallListChanged(Handler paramHandler, int paramInt, Object paramObject)
+    {
+      Registrant localRegistrant = new Registrant(paramHandler, paramInt, paramObject);
+      this.mDataCallListChangedRegistrants.add(localRegistrant);
+    }
+    
     //***** CommandsInterface implementation
 
     public RadioState getRadioState() {
@@ -123,6 +180,16 @@ public abstract class BaseCommands implements CommandsInterface {
         synchronized (mStateMonitor) {
             mRadioStateChangedRegistrants.remove(h);
         }
+    }
+
+
+    public void registerForImsNetworkStateChanged(Handler h, int what, Object obj) {
+        Registrant r = new Registrant (h, what, obj);
+        mImsNetworkStateChangedRegistrants.add(r);
+    }
+
+    public void unregisterForImsNetworkStateChanged(Handler h) {
+        mImsNetworkStateChangedRegistrants.remove(h);
     }
 
     public void registerForOn(Handler h, int what, Object obj) {
@@ -440,6 +507,14 @@ public abstract class BaseCommands implements CommandsInterface {
         mUnsolOemHookRawRegistrant.clear();
     }
 
+    public void setOnUnsolOemHookExtApp(Handler h, int what, Object obj) {
+        mUnsolOemHookExtAppRegistrant = new Registrant(h, what, obj);
+    }
+
+    public void unSetOnUnsolOemHookExtApp(Handler h) {
+        mUnsolOemHookExtAppRegistrant.clear();
+    }
+
     public void unregisterForSignalInfo(Handler h) {
         mSignalInfoRegistrants.remove(h);
     }
@@ -527,6 +602,15 @@ public abstract class BaseCommands implements CommandsInterface {
         mCdmaSubscriptionChangedRegistrants.remove(h);
     }
 
+    public void registerForQosStateChangedInd(Handler h, int what, Object obj) {
+        Registrant r = new Registrant (h, what, obj);
+        mQosStateChangedIndRegistrants.add(r);
+    }
+
+    public void unregisterForQosStateChangedInd(Handler h) {
+        mQosStateChangedIndRegistrants.remove(h);
+    }
+
     @Override
     public void registerForCdmaPrlChanged(Handler h, int what, Object obj) {
         Registrant r = new Registrant (h, what, obj);
@@ -554,11 +638,11 @@ public abstract class BaseCommands implements CommandsInterface {
      */
     @Override
     public void registerForRilConnected(Handler h, int what, Object obj) {
-        Log.d(LOG_TAG, "registerForRilConnected h=" + h + " w=" + what);
+        Log.d(LOG_TAG, "=====================> registerForRilConnected h=" + h + " w=" + what);
         Registrant r = new Registrant (h, what, obj);
         mRilConnectedRegistrants.add(r);
         if (mRilVersion != -1) {
-            Log.d(LOG_TAG, "Notifying: ril connected mRilVersion=" + mRilVersion);
+            Log.d(LOG_TAG, "=================> Notifying: ril connected mRilVersion=" + mRilVersion);
             r.notifyRegistrant(new AsyncResult(null, new Integer(mRilVersion), null));
         }
     }
@@ -572,7 +656,40 @@ public abstract class BaseCommands implements CommandsInterface {
      * {@inheritDoc}
      */
     @Override
-    public void setCurrentPreferredNetworkType() {
+    public void setCurrentPreferredNetworkType() {   
+    }
+
+    public void registerForCdmaFwdBurstDtmf(Handler h, int what, Object obj) {
+        mCdmaFwdBurstDtmfRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForCdmaFwdBurstDtmf(Handler h) {
+        mCdmaFwdBurstDtmfRegistrants.remove(h);
+    }
+
+    public void registerForCdmaFwdContDtmfStart(Handler h, int what, Object obj) {
+        mCdmaFwdContDtmfStartRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForCdmaFwdContDtmfStart(Handler h) {
+        mCdmaFwdContDtmfStartRegistrants.remove(h);
+    }
+
+    public void registerForCdmaFwdContDtmfStop(Handler h, int what, Object obj) {
+        mCdmaFwdContDtmfStopRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForCdmaFwdContDtmfStop(Handler h) {
+        mCdmaFwdContDtmfStopRegistrants.remove(h);
+    }
+
+    public void registerForSubscriptionStatusChanged(Handler h, int what, Object obj) {
+        Registrant r = new Registrant (h, what, obj);
+        mSubscriptionStatusRegistrants.add(r);
+    }
+
+    public void unregisterForSubscriptionStatusChanged(Handler h) {
+        mSubscriptionStatusRegistrants.remove(h);
     }
 
     //***** Protected Methods
@@ -590,11 +707,6 @@ public abstract class BaseCommands implements CommandsInterface {
         RadioState oldState;
 
         synchronized (mStateMonitor) {
-            if (false) {
-                Log.v(LOG_TAG, "setRadioState old: " + mState
-                    + " new " + newState);
-            }
-
             oldState = mState;
             mState = newState;
 
@@ -706,7 +818,8 @@ public abstract class BaseCommands implements CommandsInterface {
                     retVal = Phone.LTE_ON_CDMA_FALSE;
                 }
             } else {
-                retVal = Phone.LTE_ON_CDMA_FALSE;
+//                retVal = Phone.LTE_ON_CDMA_FALSE;
+                retVal =  Phone.LTE_ON_CDMA_UNKNOWN;
             }
         }
 
@@ -718,21 +831,9 @@ public abstract class BaseCommands implements CommandsInterface {
 
     @Override
     public void testingEmergencyCall() {}
-
-    /**
-     * @hide
-     */
-    @Override
-    public int getLteOnGsmMode() {
-        return getLteOnGsmModeStatic();
-    }
-
-    /**
-     * Return if the current radio is LTE on GSM
-     * @hide
-     */
-    public static int getLteOnGsmModeStatic() {
-        return SystemProperties.getInt(TelephonyProperties.PROPERTY_LTE_ON_GSM_DEVICE,
-                    0);
+    
+    public void setOnCatCcAlphaNotify(Handler paramHandler, int paramInt, Object paramObject)
+    {
+      this.mCatCcAlphaRegistrant = new Registrant(paramHandler, paramInt, paramObject);
     }
 }
