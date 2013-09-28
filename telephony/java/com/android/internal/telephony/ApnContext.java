@@ -35,22 +35,22 @@ public class ApnContext {
 
     private final String mApnType;
 
+    private final int mPriority;
+
     private DataConnectionTracker.State mState;
 
-    private ArrayList<ApnSetting> mWaitingApns = null;
+    private ArrayList<DataProfile> mWaitingApns = null;
 
     /** A zero indicates that all waiting APNs had a permanent error */
     private AtomicInteger mWaitingApnsPermanentFailureCountDown;
 
-    private ApnSetting mApnSetting;
+    private DataProfile mDataProfile;
 
     DataConnection mDataConnection;
 
     DataConnectionAc mDataConnectionAc;
 
     String mReason;
-
-    int mRetryCount;
 
     /**
      * user/app requested connection on this APN
@@ -64,9 +64,9 @@ public class ApnContext {
 
     public ApnContext(String apnType, String logTag) {
         mApnType = apnType;
+        mPriority = DataConnectionTracker.mApnPriorities.get(apnType);
         mState = DataConnectionTracker.State.IDLE;
         setReason(Phone.REASON_DATA_ENABLED);
-        setRetryCount(0);
         mDataEnabled = new AtomicBoolean(false);
         mDependencyMet = new AtomicBoolean(true);
         mWaitingApnsPermanentFailureCountDown = new AtomicInteger(0);
@@ -107,15 +107,15 @@ public class ApnContext {
         mDataConnectionAc = dcac;
     }
 
-    public synchronized ApnSetting getApnSetting() {
-        return mApnSetting;
+    public synchronized DataProfile getApnSetting() {
+        return mDataProfile;
     }
 
-    public synchronized void setApnSetting(ApnSetting apnSetting) {
-        mApnSetting = apnSetting;
+    public synchronized void setApnSetting(DataProfile apnSetting) {
+        mDataProfile = apnSetting;
     }
 
-    public synchronized void setWaitingApns(ArrayList<ApnSetting> waitingApns) {
+    public synchronized void setWaitingApns(ArrayList<DataProfile> waitingApns) {
         mWaitingApns = waitingApns;
         mWaitingApnsPermanentFailureCountDown.set(mWaitingApns.size());
     }
@@ -128,9 +128,9 @@ public class ApnContext {
         mWaitingApnsPermanentFailureCountDown.decrementAndGet();
     }
 
-    public synchronized ApnSetting getNextWaitingApn() {
-        ArrayList<ApnSetting> list = mWaitingApns;
-        ApnSetting apn = null;
+    public synchronized DataProfile getNextWaitingApn() {
+        ArrayList<DataProfile> list = mWaitingApns;
+        DataProfile apn = null;
 
         if (list != null) {
             if (!list.isEmpty()) {
@@ -140,14 +140,30 @@ public class ApnContext {
         return apn;
     }
 
-    public synchronized void removeWaitingApn(ApnSetting apn) {
+    public synchronized void removeWaitingApn(DataProfile apn) {
         if (mWaitingApns != null) {
             mWaitingApns.remove(apn);
         }
     }
 
-    public synchronized ArrayList<ApnSetting> getWaitingApns() {
+    public synchronized ArrayList<DataProfile> getWaitingApns() {
         return mWaitingApns;
+    }
+
+    public synchronized int getPriority() {
+        return mPriority;
+    }
+
+    public synchronized boolean isHigherPriority(ApnContext context) {
+        return this.mPriority > context.getPriority();
+    }
+
+    public synchronized boolean isLowerPriority(ApnContext context) {
+        return this.mPriority < context.getPriority();
+    }
+
+    public synchronized boolean isEqualPriority(ApnContext context) {
+        return this.mPriority == context.getPriority();
     }
 
     public synchronized void setState(DataConnectionTracker.State s) {
@@ -185,21 +201,6 @@ public class ApnContext {
         return mReason;
     }
 
-    public synchronized void setRetryCount(int retryCount) {
-        if (DBG) {
-            log("setRetryCount: " + retryCount);
-        }
-        mRetryCount = retryCount;
-        DataConnection dc = mDataConnection;
-        if (dc != null) {
-            dc.setRetryCount(retryCount);
-        }
-    }
-
-    public synchronized int getRetryCount() {
-        return mRetryCount;
-    }
-
     public boolean isReady() {
         return mDataEnabled.get() && mDependencyMet.get();
     }
@@ -231,9 +232,9 @@ public class ApnContext {
         // We don't print mDataConnection because its recursive.
         return "{mApnType=" + mApnType + " mState=" + getState() + " mWaitingApns=" + mWaitingApns +
                 " mWaitingApnsPermanentFailureCountDown=" + mWaitingApnsPermanentFailureCountDown +
-                " mApnSetting=" + mApnSetting + " mDataConnectionAc=" + mDataConnectionAc +
-                " mReason=" + mReason + " mRetryCount=" + mRetryCount +
-                " mDataEnabled=" + mDataEnabled + " mDependencyMet=" + mDependencyMet + "}";
+                " mDataProfile =" + mDataProfile  + " mDataConnectionAc=" + mDataConnectionAc +
+                " mReason=" + mReason + " mDataEnabled=" + mDataEnabled +
+                " mDependencyMet=" + mDependencyMet + "}";
     }
 
     protected void log(String s) {
