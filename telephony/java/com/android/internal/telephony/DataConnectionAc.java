@@ -17,6 +17,7 @@
 package com.android.internal.telephony;
 
 import com.android.internal.telephony.DataConnection.UpdateLinkPropertyResult;
+import com.android.internal.telephony.DataProfile;
 import com.android.internal.util.AsyncChannel;
 import com.android.internal.util.Protocol;
 
@@ -81,7 +82,9 @@ public class DataConnectionAc extends AsyncChannel {
 
     public static final int REQ_GET_RECONNECT_INTENT = BASE + 26;
     public static final int RSP_GET_RECONNECT_INTENT = BASE + 27;
-
+    public static final int REQ_GET_PARTIAL_FAILURE_STATUS = BASE + 28;
+    
+    
     private static final int CMD_TO_STRING_COUNT = RSP_GET_RECONNECT_INTENT - BASE + 1;
     private static String[] sCmdToString = new String[CMD_TO_STRING_COUNT];
     static {
@@ -254,7 +257,7 @@ public class DataConnectionAc extends AsyncChannel {
     }
 
     /**
-     * Request the connections ApnSetting.
+     * Request the connections DataProfile.
      * Response {@link #rspApnSetting}
      */
     public void reqApnSetting() {
@@ -263,23 +266,23 @@ public class DataConnectionAc extends AsyncChannel {
     }
 
     /**
-     * Evaluate a RSP_APN_SETTING message and return the ApnSetting.
+     * Evaluate a RSP_APN_SETTING message and return the DataProfile.
      *
      * @param response Message
-     * @return ApnSetting, maybe null
+     * @return DataProfile, maybe null
      */
-    public ApnSetting rspApnSetting(Message response) {
-        ApnSetting retVal = (ApnSetting) response.obj;
+    public DataProfile rspApnSetting(Message response) {
+        DataProfile retVal = (DataProfile) response.obj;
         if (DBG) log("rspApnSetting=" + retVal);
         return retVal;
     }
 
     /**
-     * Get the connections ApnSetting.
+     * Get the connections DataProfile.
      *
-     * @return ApnSetting or null if an error
+     * @return DataProfile or null if an error
      */
-    public ApnSetting getApnSettingSync() {
+    public DataProfile getApnSettingSync() {
         Message response = sendMessageSynchronously(REQ_GET_APNSETTING);
         if ((response != null) && (response.what == RSP_GET_APNSETTING)) {
             return rspApnSetting(response);
@@ -310,6 +313,21 @@ public class DataConnectionAc extends AsyncChannel {
         return retVal;
     }
 
+    public boolean getPartialSuccessStatusSync(){
+      int i = 1;
+      Message response = sendMessageSynchronously(266268);
+      if ((response != null) && (response.what == 266269)){
+    	  if(response.arg1 != i){
+    		  return true;
+    	  }else{
+    		  return false;
+    	  }
+      }else{
+    	  log("getPartialSuccessStatusSync error response=" + response + " returning false");
+    	  return false;
+      }
+    }
+    
     /**
      * Get the connections LinkProperties.
      *
