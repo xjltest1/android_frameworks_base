@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2007 The Android Open Source Project
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,9 +29,9 @@ import android.telephony.ServiceState;
 import android.telephony.SignalStrength;
 
 import com.android.internal.telephony.DataConnection;
-import com.android.internal.telephony.gsm.UsimServiceTable;
-import com.android.internal.telephony.ims.IsimRecords;
-import com.android.internal.telephony.test.SimulatedRadioControl;
+import com.android.internal.telephony.QosSpec;
+import com.android.internal.telephony.uicc.IsimRecords;
+import com.android.internal.telephony.uicc.UsimServiceTable;
 
 import java.util.List;
 
@@ -155,6 +156,18 @@ public interface Phone {
     static final int APN_REQUEST_FAILED     = 3;
     static final int APN_ALREADY_INACTIVE   = 4;
 
+    /**
+     * Return codes for QoS APIs
+     */
+    static final int QOS_REQUEST_SUCCESS = 0;
+    static final int QOS_REQUEST_FAILURE = 1;
+    /**
+     * Return codes for supplyPinReturnResult and
+     * supplyPukReturnResult APIs
+     */
+    static final int PIN_RESULT_SUCCESS = 0;
+    static final int PIN_PASSWORD_INCORRECT = 1;
+    static final int PIN_GENERAL_FAILURE = 2;
 
     /**
      * Optional reasons for disconnect and connect
@@ -182,6 +195,10 @@ public interface Phone {
     static final String REASON_DATA_DEPENDENCY_MET = "dependencyMet";
     static final String REASON_DATA_DEPENDENCY_UNMET = "dependencyUnmet";
     static final String REASON_LINK_PROPERTIES_CHANGED = "linkPropertiesChanged";
+    static final String REASON_TETHERED_MODE_STATE_CHANGED = "tetheredModeStateChanged";
+    static final String REASON_SINGLE_PDN_ARBITRATION = "SinglePdnArbitration";
+    static final String REASON_DATA_READINESS_CHECKS_MODIFIED = "dataReadinessChecksModified";
+    static final String REASON_NV_READY = "NvReady";
 
     // Used for band mode selection methods
     static final int BM_UNSPECIFIED = 0; // selected by baseband automatically
@@ -209,19 +226,19 @@ public interface Phone {
     int NT_MODE_GSM_ONLY     = RILConstants.NETWORK_MODE_GSM_ONLY;
     int NT_MODE_WCDMA_ONLY   = RILConstants.NETWORK_MODE_WCDMA_ONLY;
     int NT_MODE_GSM_UMTS     = RILConstants.NETWORK_MODE_GSM_UMTS;
-    int NT_MODE_LTE_GSM_WCDMA= RILConstants.NETWORK_MODE_LTE_GSM_WCDMA;
 
     int NT_MODE_CDMA         = RILConstants.NETWORK_MODE_CDMA;
 
     int NT_MODE_CDMA_NO_EVDO = RILConstants.NETWORK_MODE_CDMA_NO_EVDO;
     int NT_MODE_EVDO_NO_CDMA = RILConstants.NETWORK_MODE_EVDO_NO_CDMA;
     int NT_MODE_GLOBAL       = RILConstants.NETWORK_MODE_GLOBAL;
-    int NT_MODE_LTE_CDMA_EVDO = RILConstants.NETWORK_MODE_LTE_CDMA_EVDO;
-    int NT_MODE_LTE_CMDA_EVDO_GSM_WCDMA = RILConstants.NETWORK_MODE_LTE_CMDA_EVDO_GSM_WCDMA;
 
-    int NT_MODE_LTE_ONLY     = RILConstants.NETWORK_MODE_LTE_ONLY;
-    int PREFERRED_NT_MODE    = RILConstants.PREFERRED_NETWORK_MODE;
-
+    int NT_MODE_LTE_CDMA_AND_EVDO        = RILConstants.NETWORK_MODE_LTE_CDMA_EVDO;
+    int NT_MODE_LTE_GSM_WCDMA            = RILConstants.NETWORK_MODE_LTE_GSM_WCDMA;
+    int NT_MODE_LTE_CMDA_EVDO_GSM_WCDMA  = RILConstants.NETWORK_MODE_LTE_CMDA_EVDO_GSM_WCDMA;
+    int NT_MODE_LTE_ONLY                 = RILConstants.NETWORK_MODE_LTE_ONLY;
+    int NT_MODE_LTE_WCDMA                = RILConstants.NETWORK_MODE_LTE_WCDMA;
+    int PREFERRED_NT_MODE                = RILConstants.PREFERRED_NETWORK_MODE;
 
     // Used for CDMA roaming mode
     static final int CDMA_RM_HOME        = 0;  // Home Networks only, as defined in PRL
@@ -295,6 +312,18 @@ public interface Phone {
      * Gets the context for the phone, as set at initialization time.
      */
     Context getContext();
+
+    /**
+     * Modify data readiness checks performed during data call setup
+     *
+     * @param checkConnectivity - check for network state in service, roaming and data in roaming
+     *                            enabled.
+     * @param checkSubscription - check for icc/nv ready and icc records loaded.
+     * @param tryDataCalls - set to true to attempt data calls if data call is not already active.
+     *
+     */
+    public void setDataReadinessChecks(
+            boolean checkConnectivity, boolean checkSubscription, boolean tryDataCalls);
 
     /**
      * Disables the DNS check (i.e., allows "0.0.0.0").
@@ -1251,6 +1280,22 @@ public interface Phone {
     void invokeOemRilRequestStrings(String[] strings, Message response);
 
     /**
+     * Register for RIL_UNSOL_OEM_HOOK_EXT_APP responses from RIL
+     *
+     * @param h Handler that receives the notification message.
+     * @param what User-defined message code.
+     * @param obj User object.
+     */
+    void setOnUnsolOemHookExtApp(Handler h, int what, Object obj);
+
+    /**
+     * Unregister a RIL_UNSOL_OEM_HOOK_EXT_APP response handler
+     *
+     * @param h Handler to be removed from the registrant list.
+     */
+    void unSetOnUnsolOemHookExtApp(Handler h);
+
+    /**
      * Get the current active Data Call list
      *
      * @param response <strong>On success</strong>, "response" bytes is
@@ -1342,7 +1387,7 @@ public interface Phone {
      * @ return A SimulatedRadioControl if this is a simulated interface;
      * otherwise, null.
      */
-    SimulatedRadioControl getSimulatedRadioControl();
+    //SimulatedRadioControl getSimulatedRadioControl();
 
     /**
      * Enables the specified APN type. Only works for "special" APN types,
@@ -1380,6 +1425,56 @@ public interface Phone {
      * Report on whether data connectivity is allowed.
      */
     boolean isDataConnectivityPossible();
+
+    /**
+     * Enable QoS
+     *
+     * @param qosSpec QosSpec requested
+     * @param type Apn Type on which QoS is requested on
+     * @return true on success, else false
+     */
+    int enableQos(QosSpec qosSpec, String type);
+
+    /**
+     * Disable QoS
+     *
+     * @param qosId QoS identifier of the flow
+     * @return true on success, else false
+     */
+    int disableQos(int qosId);
+
+    /**
+     * Modify QoS
+     *
+     * @param qosId QoS identifier of the flow
+     * @param qosSpec New capabilities requested
+     * @return true on success, else false
+     */
+    int modifyQos(int qosId, QosSpec qosSpec);
+
+    /**
+     * Suspend QoS
+     *
+     * @param qosId QoS identifier of the flow
+     * @return
+     */
+    int suspendQos(int qosId);
+
+    /**
+     * Resume QoS
+     *
+     * @param qosId QoS identifier of the flow
+     * @return
+     */
+    int resumeQos(int qosId);
+
+    /**
+     * Retreive the QoS parameters of a particular QoS flow
+     *
+     * @param qosId QoS identifier
+     * @return true on success, else false
+     */
+    int getQosStatus(int qosId);
 
     /**
      * Report on whether data connectivity is allowed for an APN.
@@ -1452,11 +1547,6 @@ public interface Phone {
      * Retrieves the PhoneSubInfo of the Phone
      */
     public PhoneSubInfo getPhoneSubInfo();
-
-    /**
-     * Retrieves the IccSmsInterfaceManager of the Phone
-     */
-    public IccSmsInterfaceManager getIccSmsInterfaceManager();
 
     /**
      * Retrieves the IccPhoneBookInterfaceManager of the Phone
@@ -1734,12 +1824,6 @@ public interface Phone {
     public int getLteOnCdmaMode();
 
     /**
-     * Return if the current radio is LTE on GSM
-     * @hide
-     */
-    public int getLteOnGsmMode();
-
-    /**
      * TODO: Adding a function for each property is not good.
      * A fucntion of type getPhoneProp(propType) where propType is an
      * enum of GSM+CDMA+LTE props would be a better approach.
@@ -1750,6 +1834,12 @@ public interface Phone {
      * false otherwise
      */
     boolean isCspPlmnEnabled();
+
+    /* Checks if manual network selection is allowed
+     * @return true if manual network selection is allowed
+     * @return false if manual network selection is not allowed
+     */
+    public boolean isManualNetSelAllowed();
 
     /**
      * Return an interface to retrieve the ISIM records for IMS, if available.
@@ -1768,15 +1858,6 @@ public interface Phone {
     void requestIsimAuthentication(String nonce, Message response);
 
     /**
-     * Sets the SIM voice message waiting indicator records.
-     * @param line GSM Subscriber Profile Number, one-based. Only '1' is supported
-     * @param countWaiting The number of messages waiting, if known. Use
-     *                     -1 to indicate that an unknown number of
-     *                      messages are waiting
-     */
-    void setVoiceMessageWaiting(int line, int countWaiting);
-
-    /**
      * Gets the USIM service table from the UICC, if present and available.
      * @return an interface to the UsimServiceTable record, or null if not available
      */
@@ -1792,4 +1873,9 @@ public interface Phone {
      * Remove references to external object stored in this object.
      */
     void removeReferences();
+
+    /**
+     * Returns the subscription id.
+     */
+    public int getSubscription();
 }
