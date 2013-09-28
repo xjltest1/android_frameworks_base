@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006 The Android Open Source Project
+ * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +17,11 @@
 
 package com.android.internal.telephony;
 
+import com.android.internal.telephony.cdma.CdmaSmsBroadcastConfigInfo;
 import com.android.internal.telephony.gsm.SmsBroadcastConfigInfo;
+import com.android.internal.telephony.uicc.IccCardStatus;
+
+import java.util.ArrayList;
 
 import android.os.Message;
 import android.os.Handler;
@@ -107,8 +112,20 @@ public interface CommandsInterface {
 
     //***** Methods
     RadioState getRadioState();
-
+    public abstract void setOnSS(Handler paramHandler, int paramInt, Object paramObject);
+    public abstract void unSetOnSS(Handler paramHandler);
     void getVoiceRadioTechnology(Message result);
+
+    /** new API phone ril DSDS add liuyongsheng
+     * response.obj.result is an int[2]
+     *
+     * response.obj.result[0] is registration state
+     *                        0 - Not registered
+     *                        1 - Registered
+     * response.obj.result[1] is of type const RIL_IMS_SMS_Format,
+     *                        corresponds to sms format used for SMS over IMS.
+     */
+    void getImsRegistrationState(Message result);
 
     /**
      * Fires on any RadioState transition
@@ -123,6 +140,11 @@ public interface CommandsInterface {
 
     void registerForVoiceRadioTechChanged(Handler h, int what, Object obj);
     void unregisterForVoiceRadioTechChanged(Handler h);
+    
+    /** new API phone ril DSDS add liuyongsheng*/
+    void registerForImsNetworkStateChanged(Handler h, int what, Object obj);
+    /** new API phone ril DSDS add liuyongsheng*/
+    void unregisterForImsNetworkStateChanged(Handler h);
 
     /**
      * Fires on any transition into RadioState.isOn()
@@ -176,8 +198,21 @@ public interface CommandsInterface {
     /** InCall voice privacy notifications */
     void registerForInCallVoicePrivacyOn(Handler h, int what, Object obj);
     void unregisterForInCallVoicePrivacyOn(Handler h);
+    
+    /** new API phone ril DSDS add liuyongsheng*/
     void registerForInCallVoicePrivacyOff(Handler h, int what, Object obj);
+    /** new API phone ril DSDS add liuyongsheng*/
     void unregisterForInCallVoicePrivacyOff(Handler h);
+
+    /**
+     * Handlers for subscription status change indications.
+     *
+     * @param h Handler for subscription status change messages.
+     * @param what User-defined message code.
+     * @param obj User object.
+     */
+    void registerForSubscriptionStatusChanged(Handler h, int what, Object obj);
+    void unregisterForSubscriptionStatusChanged(Handler h);
 
     /**
      * unlike the register* methods, there's only one new 3GPP format SMS handler.
@@ -533,10 +568,20 @@ public interface CommandsInterface {
       * @param h Handler for notification message.
       * @param what User-defined message code.
       * @param obj User object.
-      *
+      *  new API phone ril DSDS add liuyongsheng
       */
      void registerForExitEmergencyCallbackMode(Handler h, int what, Object obj);
      void unregisterForExitEmergencyCallbackMode(Handler h);
+
+    /**
+     * Handlers for QoS state change indication
+     * @param h Handler for subscription ready messages.
+     * @param what User-defined message code.
+     * @param obj User object.
+     */
+    void registerForQosStateChangedInd(Handler h, int what, Object obj);
+    void unregisterForQosStateChangedInd(Handler h);
+
 
      /**
       * Registers the handler for RIL_UNSOL_RIL_CONNECT events.
@@ -1000,6 +1045,31 @@ public interface CommandsInterface {
      */
     void sendCdmaSms(byte[] pdu, Message response);
 
+    /**  new API phone ril DSDS add liuyongsheng
+     * send SMS over IMS with 3GPP/GSM SMS format
+     * @param smscPDU is smsc address in PDU form GSM BCD format prefixed
+     *      by a length byte (as expected by TS 27.005) or NULL for default SMSC
+     * @param pdu is SMS in PDU format as an ASCII hex string
+     *      less the SMSC address
+     * @param retry indicates if this is a retry; 0 == not retry, nonzero = retry
+     * @param messageRef valid field if retry is set to nonzero.
+     *        Contains messageRef from RIL_SMS_Response corresponding to failed MO SMS
+     * @param response sent when operation completes
+     */
+    void sendImsGsmSms (String smscPDU, String pdu, int retry, int messageRef,
+            Message response);
+
+    /**  new API phone ril DSDS add liuyongsheng
+     * send SMS over IMS with 3GPP2/CDMA SMS format
+     * @param pdu is CDMA-SMS in internal pseudo-PDU format
+     * @param response sent when operation completes
+     * @param retry indicates if this is a retry; 0 == not retry, nonzero = retry
+     * @param messageRef valid field if retry is set to nonzero.
+     *        Contains messageRef from RIL_SMS_Response corresponding to failed MO SMS
+     * @param response sent when operation completes
+     */
+    void sendImsCdmaSms(byte[] pdu, int retry, int messageRef, Message response);
+
     /**
      * Deletes the specified SMS record from SIM memory (EF_SMS).
      *
@@ -1299,7 +1369,7 @@ public interface CommandsInterface {
      */
     void reportSmsMemoryStatus(boolean available, Message result);
 
-    /**
+    /** 
      * Indicates to the vendor ril that StkService is running
      * and is ready to receive RIL_UNSOL_STK_XXXX commands.
      *
@@ -1311,6 +1381,10 @@ public interface CommandsInterface {
 
     void invokeOemRilRequestStrings(String[] strings, Message response);
 
+    /**new API phone ril DSDS add liuyongsheng*/
+    void setOnUnsolOemHookExtApp(Handler h, int what, Object obj);
+    /**new API phone ril DSDS add liuyongsheng*/
+    void unSetOnUnsolOemHookExtApp(Handler h);
 
     /**
      * Send TERMINAL RESPONSE to the SIM, after processing a proactive command
@@ -1527,6 +1601,9 @@ public interface CommandsInterface {
      */
     // TODO: Change the configValuesArray to a RIL_BroadcastSMSConfig
     public void setCdmaBroadcastConfig(int[] configValuesArray, Message result);
+    
+    /**new API phone ril DSDS add liuyongsheng*/
+    public void setCdmaBroadcastConfig(CdmaSmsBroadcastConfigInfo[] configs, Message response);
 
     /**
      * Query the current configuration of cdma cell broadcast SMS.
@@ -1567,6 +1644,18 @@ public interface CommandsInterface {
      * @hide
      */
     public int getLteOnGsmMode();
+    
+    /**new API phone ril DSDS add liuyongsheng
+     * Get the data call profile information from the modem
+     *
+     * @param appType
+     *          Callback message containing the count and the list of {@link
+     *          RIL_DataCallProfileInfo}
+     *
+     * @param result
+     *          Callback message
+     */
+    public void getDataCallProfile(int appType, Message result);
 
     /**
      * Request the ISIM application on the UICC to perform the AKA
@@ -1582,12 +1671,81 @@ public interface CommandsInterface {
      * Notifiy that we are testing an emergency call
      */
     public void testingEmergencyCall();
+    /**
+     * Sets Quality of Service(QoS) parameters at Modem.
+     * @param callId
+     *          Call ID of the data call for which QoS is requested
+     * @param qosFlows
+     *          List of QoS flows to be setup for this call
+     * @param result
+     *          Callback message contains the information of SUCCESS/FAILURE.
+    */
+    public void setupQosReq (int callId, ArrayList<String> qosFlows, Message result);
 
+    /**
+     * Request to Quality of Service(QOS).
+     * @param qosId
+     * @param result
+     *          Callback message contains the information of SUCCESS/FAILURE.
+    */
+    public void releaseQos (int qosId, Message result);
+    
+    /**
+     * Modify an active Quality of Service(QoS).
+     * @param qosId
+     * @param qosFlows
+     * @param result
+     *          Callback message contains the information of SUCCESS/FAILURE.
+    */
+    public void modifyQos (int qosId, ArrayList<String> qosFlows, Message result);
+
+    /**
+     * Suspends an active Quality of Service(QoS).
+     * @param qosId
+     * @param result
+     *          Callback message contains the information of SUCCESS/FAILURE.
+    */
+    public void suspendQos (int qosId, Message result);
+
+    /**
+     * Resume a suspended Quality of Service(QoS).
+     * @param qosId
+     * @param result
+     *          Callback message contains the information of SUCCESS/FAILURE.
+    */
+    public void resumeQos (int qosId, Message result);
+
+    /**
+     * Gets current status and parameters associated with the given QoS ID.
+     * @param qosId
+     * @param result
+     *          Callback message contains the information of SUCCESS/FAILURE.
+    */
+    public void getQosStatus (int qosId, Message result);
+
+   /**
+     * Sets user selected subscription at Modem.
+     *
+     * @param slotId
+     *          Slot.
+     * @param appIndex
+     *          Application index in the card.
+     * @param subId
+     *          Indicates subscription 0 or subscription 1.
+     * @param subStatus
+     *          Activation status, 1 = activate and 0 = deactivate.
+     * @param result
+     *          Callback message contains the information of SUCCESS/FAILURE.
+     */
+    public void setUiccSubscription(int slotId, int appIndex, int subId, int subStatus,
+            Message result);
+    
     /**
      * @hide
      * CM-specific: Ask the RIL about the presence of back-compat flags
      */
     public boolean needsOldRilFeature(String feature);
+    
     /**
      * @hide
      * samsung stk service implementation - set up registrant for sending
@@ -1595,4 +1753,29 @@ public interface CommandsInterface {
      */
     void setOnCatSendSmsResult(Handler h, int what, Object obj);
     void unSetOnCatSendSmsResult(Handler h);
+    
+    /**new API phone ril DSDS add liuyongsheng
+     * Set Data Subscription preference at Modem.
+     *
+     * @param result
+     *          Callback message contains the information of SUCCESS/FAILURE.
+     */
+    public void setDataSubscription (Message result);
+
+    /**new API phone ril DSDS add liuyongsheng
+     * Sets SingleStandByMode or DualStandBy mode at Modem.
+     * @param subscriptionMode
+                1 for SingleStandBy (Single SIM functionality)
+                2 for DualStandBy (Dual SIM functionality)
+     * @param result
+     *          Callback message contains the information of SUCCESS/FAILURE.
+    */
+    public void setSubscriptionMode (int subscriptionMode, Message result);
+    
+    public abstract void setOnCatCcAlphaNotify(Handler paramHandler, int paramInt, Object paramObject);
+    
+    public abstract void registerForDataCallListChanged(Handler paramHandler, int paramInt, Object paramObject);
+    
+    public abstract void unregisterForDataCallListChanged(Handler paramHandler);
+
 }
