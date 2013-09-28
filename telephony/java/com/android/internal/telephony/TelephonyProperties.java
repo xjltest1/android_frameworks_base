@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006 The Android Open Source Project
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,11 +89,6 @@ public interface TelephonyProperties
      */
     static final String PROPERTY_LTE_ON_CDMA_DEVICE = "telephony.lteOnCdmaDevice";
 
-    /**
-     * {@see BaseCommands#getLteOnGsmMode()}
-     */
-    static final String PROPERTY_LTE_ON_GSM_DEVICE = "telephony.lteOnGsmDevice";
-
     static final String CURRENT_ACTIVE_PHONE = "gsm.current.phone-type";
 
     //****** SIM Card
@@ -107,6 +103,12 @@ public interface TelephonyProperties
      *  Availability: SIM state must be "READY"
      */
     static String PROPERTY_ICC_OPERATOR_NUMERIC = "gsm.sim.operator.numeric";
+
+    /** The MCC+MNC (mobile country code+mobile network code) of the
+     *  provider of the SIM to be used for APNs lookup. 5 or 6 decimal digits.
+     *  Availability: SIM state must be "READY"
+     */
+    static String PROPERTY_APN_SIM_OPERATOR_NUMERIC = "gsm.apn.sim.operator.numeric";
 
     /** PROPERTY_ICC_OPERATOR_ALPHA is also known as the SPN, or Service Provider Name.
      *  Availability: SIM state must be "READY"
@@ -194,7 +196,61 @@ public interface TelephonyProperties
     static final String PROPERTY_IGNORE_NITZ = "telephony.test.ignore.nitz";
 
     /**
-     * Set to true to indicates support for simultaneous voice and data.
+     * Indicates whether Out Of Service is considered as data call disconnect.
      */
-    static final String PROPERTY_SVDATA = "ro.config.svlte1x";
+    static final String PROPERTY_OOS_IS_DISCONNECT = "persist.telephony.oosisdc";
+
+    /**
+     * Property that shows the status of the OMH feature
+     */
+    static final String PROPERTY_OMH_ENABLED = "persist.omh.enabled";
+
+    /**
+     * Property that can be used to set the IP version for CDMA
+     */
+    static final String PROPERTY_CDMA_IPPROTOCOL = "persist.telephony.cdma.protocol";
+
+    /**
+     * Property that can be used to set the IP version for CDMA when roaming
+     */
+    static final String PROPERTY_CDMA_ROAMING_IPPROTOCOL = "persist.telephony.cdma.rproto";
+
+    /** The delay between sms sending retries */
+    static final String PROPERTY_SMS_RETRY_DELAY = "persist.radio.sms_retry_delay";
+
+    /**
+     * Property to control alpha ID display for proactive commands
+     * Type: boolean ( true = alpha display enabled, false = alpha display disabled)
+     */
+    static final String PROPERTY_ALPHA_USRCNF = "persist.atel.noalpha.usrcnf";
+
+    /**
+     * Property to identify the baseband.
+     * Type: string (msm, sglte, apq )
+     */
+     static final String PROPERTY_BASEBAND = "ro.baseband";
+
+    /**
+     * Property to decide SgLte Modem Index
+     * Type: int ( 0 = local modem(MSM), 1 = remote modem(QSC))
+     * Default value 0.
+     */
+    static final String PROPERTY_VOICE_MODEM_INDEX = "persist.radio.voice.modem.index";
+
+    /**
+     * Property to control EONS.
+     * Type: boolean ( true = EONS enabled, false = EONS disabled)
+     */
+    static final String PROPERTY_EONS_ENABLED = "persist.radio.eons.enabled";
+
+    /**
+     * Property to set multi sim feature.
+     * Type:  String(dsds, dsda)
+     */
+    static final String PROPERTY_MULTI_SIM_CONFIG = "persist.multisim.config";
+
+    /**
+     * Property to start two ril daemons in case of multi sim.
+     */
+    static final String PROPERTY_MULTI_RILD = "ro.multi.rild";
 }
