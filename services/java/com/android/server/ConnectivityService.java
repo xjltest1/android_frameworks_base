@@ -72,6 +72,7 @@ import android.os.SystemProperties;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.EventLog;
+import android.util.Log;
 import android.util.Slog;
 import android.util.SparseIntArray;
 
@@ -295,7 +296,7 @@ public class ConnectivityService extends IConnectivityManager.Stub {
     private Collection<RouteInfo> mAddedRoutes = new ArrayList<RouteInfo>();
 
     // used in DBG mode to track inet condition reports
-    private static final int INET_CONDITION_LOG_MAX_SIZE = 15;
+    private static final int INET_CONDITION_LOG_MAX_SIZE = 30;
     private ArrayList mInetLog;
 
     // track the current default http proxy - tell the world if we get a new one (real change)
@@ -491,6 +492,7 @@ public class ConnectivityService extends IConnectivityManager.Stub {
                 mNetTrackers[netType].startMonitoring(context, mHandler);
                break;
             case ConnectivityManager.TYPE_MOBILE:
+            	//Log.e(TAG, "****************************new MobieDataStateTracker :::::mHandler = "+mHandler+"  :::  netType =  " + netType +"  ::: name = " +  mNetConfigs[netType].name);
                 mNetTrackers[netType] = new MobileDataStateTracker(netType,
                         mNetConfigs[netType].name);
                 mNetTrackers[netType].startMonitoring(context, mHandler);
@@ -625,7 +627,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
     public void setNetworkPreference(int preference) {
         enforceChangePermission();
 
-        mHandler.sendMessage(mHandler.obtainMessage(EVENT_SET_NETWORK_PREFERENCE, preference, 0));
+        mHandler.sendMessage(mHandler.obtainMessage(EVENT_SET_NETWORK_PREFERENCE, preference, -1));
     }
 
     public int getNetworkPreference() {
@@ -1507,7 +1509,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
         if (DBG) log("setMobileDataEnabled(" + enabled + ")");
 
         mHandler.sendMessage(mHandler.obtainMessage(EVENT_SET_MOBILE_DATA,
-                (enabled ? ENABLED : DISABLED), 0));
+                (enabled ? ENABLED : DISABLED), -1));
     }
 
     private void handleSetMobileData(boolean enabled) {
@@ -1897,7 +1899,7 @@ private NetworkStateTracker makeWimaxStateTracker() {
                 if (mNetTransitionWakeLock.isHeld()) {
                     mHandler.sendMessageDelayed(mHandler.obtainMessage(
                             EVENT_CLEAR_NET_TRANSITION_WAKELOCK,
-                            mNetTransitionWakeLockSerialNumber, 0),
+                            mNetTransitionWakeLockSerialNumber, -1),
                             1000);
                 }
             }
@@ -2478,19 +2480,19 @@ private NetworkStateTracker makeWimaxStateTracker() {
                         handleConnect(info);
                     }
                     break;
-                case NetworkStateTracker.EVENT_CONFIGURATION_CHANGED:
+                case NetworkStateTracker.EVENT_CONFIGURATION_CHANGED://3
                     info = (NetworkInfo) msg.obj;
                     // TODO: Temporary allowing network configuration
                     //       change not resetting sockets.
                     //       @see bug/4455071
                     handleConnectivityChange(info.getType(), false);
                     break;
-                case NetworkStateTracker.EVENT_NETWORK_SUBTYPE_CHANGED:
+               case NetworkStateTracker.EVENT_NETWORK_SUBTYPE_CHANGED:
                     info = (NetworkInfo) msg.obj;
                     type = info.getType();
                     updateNetworkSettings(mNetTrackers[type]);
                     break;
-                case EVENT_CLEAR_NET_TRANSITION_WAKELOCK:
+                case EVENT_CLEAR_NET_TRANSITION_WAKELOCK://108
                     String causedBy = null;
                     synchronized (ConnectivityService.this) {
                         if (msg.arg1 == mNetTransitionWakeLockSerialNumber &&
@@ -2503,61 +2505,61 @@ private NetworkStateTracker makeWimaxStateTracker() {
                         log("NetTransition Wakelock for " + causedBy + " released by timeout");
                     }
                     break;
-                case EVENT_RESTORE_DEFAULT_NETWORK:
+                case EVENT_RESTORE_DEFAULT_NETWORK://101
                     FeatureUser u = (FeatureUser)msg.obj;
                     u.expire();
                     break;
-                case EVENT_INET_CONDITION_CHANGE:
+                case EVENT_INET_CONDITION_CHANGE://104
                 {
                     int netType = msg.arg1;
                     int condition = msg.arg2;
                     handleInetConditionChange(netType, condition);
                     break;
                 }
-                case EVENT_INET_CONDITION_HOLD_END:
+                case EVENT_INET_CONDITION_HOLD_END://105
                 {
                     int netType = msg.arg1;
                     int sequence = msg.arg2;
                     handleInetConditionHoldEnd(netType, sequence);
                     break;
                 }
-                case EVENT_SET_NETWORK_PREFERENCE:
+                case EVENT_SET_NETWORK_PREFERENCE://103
                 {
                     int preference = msg.arg1;
                     handleSetNetworkPreference(preference);
                     break;
                 }
-                case EVENT_SET_MOBILE_DATA:
+                case EVENT_SET_MOBILE_DATA://107
                 {
                     boolean enabled = (msg.arg1 == ENABLED);
                     handleSetMobileData(enabled);
                     break;
                 }
-                case EVENT_APPLY_GLOBAL_HTTP_PROXY:
+                case EVENT_APPLY_GLOBAL_HTTP_PROXY://109
                 {
                     handleDeprecatedGlobalHttpProxy();
                     break;
                 }
-                case EVENT_SET_DEPENDENCY_MET:
+                case EVENT_SET_DEPENDENCY_MET://110
                 {
                     boolean met = (msg.arg1 == ENABLED);
                     handleSetDependencyMet(msg.arg2, met);
                     break;
                 }
-                case EVENT_RESTORE_DNS:
+                case EVENT_RESTORE_DNS://111
                 {
                     if (mActiveDefaultNetwork != -1) {
                         handleDnsConfigurationChange(mActiveDefaultNetwork);
                     }
                     break;
                 }
-                case EVENT_SEND_STICKY_BROADCAST_INTENT:
+                case EVENT_SEND_STICKY_BROADCAST_INTENT://112
                 {
                     Intent intent = (Intent)msg.obj;
                     sendStickyBroadcast(intent);
                     break;
                 }
-                case EVENT_SET_POLICY_DATA_ENABLE: {
+                case EVENT_SET_POLICY_DATA_ENABLE: {//113
                     final int networkType = msg.arg1;
                     final boolean enabled = msg.arg2 == ENABLED;
                     handleSetPolicyDataEnable(networkType, enabled);
