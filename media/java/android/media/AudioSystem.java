@@ -86,6 +86,20 @@ public class AudioSystem
     public static final int MODE_IN_COMMUNICATION   = 3;
     public static final int NUM_MODES               = 4;
 
+    ///////////////////////////////////////////////////////////////
+    /* modes for setInCallPhoneState, must match AudioSystem.h audio_mode */
+    public static final int CS_INACTIVE             = 0x0;
+    public static final int CS_ACTIVE               = 0x1;
+    public static final int CS_HOLD                 = 0x2;
+    public static final int IMS_INACTIVE            = 0x0;
+    public static final int IMS_ACTIVE              = 0x10;
+    public static final int IMS_HOLD                = 0x20;
+    public static final int CS_INACTIVE_SESSION2    = 0x0;
+    public static final int CS_ACTIVE_SESSION2      = 0x100;
+    public static final int CS_HOLD_SESSION2        = 0x200;
+    ///////////////////////////////////////////////////////////////
+    
+    
 
     /* Routing bits for the former setRouting/getRouting API */
     /** @deprecated */

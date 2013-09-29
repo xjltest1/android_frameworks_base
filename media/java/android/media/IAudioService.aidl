@@ -86,7 +86,11 @@ interface IAudioService {
 
     void setMode(int mode, IBinder cb);
 
+    void setInCallMode(int state, IBinder cb);
+
     int getMode();
+
+    int getInCallMode();
 
     oneway void playSoundEffect(int effectType);
   
