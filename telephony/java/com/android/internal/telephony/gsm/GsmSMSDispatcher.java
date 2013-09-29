@@ -25,6 +25,7 @@ import android.os.Message;
 import android.os.SystemProperties;
 import android.provider.Telephony.Sms;
 import android.provider.Telephony.Sms.Intents;
+import android.telephony.CellLocation;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SmsCbLocation;
 import android.telephony.SmsCbMessage;
@@ -33,23 +34,34 @@ import android.telephony.gsm.GsmCellLocation;
 import android.util.Log;
 
 import com.android.internal.telephony.CommandsInterface;
-import com.android.internal.telephony.IccUtils;
 import com.android.internal.telephony.PhoneBase;
 import com.android.internal.telephony.SMSDispatcher;
+import com.android.internal.telephony.ImsSMSDispatcher;
 import com.android.internal.telephony.SmsHeader;
 import com.android.internal.telephony.SmsMessageBase;
 import com.android.internal.telephony.SmsMessageBase.TextEncodingDetails;
+import com.android.internal.telephony.uicc.IccRecords;
+import com.android.internal.telephony.uicc.IccUtils;
+import com.android.internal.telephony.uicc.UiccCardApplication;
+import com.android.internal.telephony.uicc.UiccController;
+import com.android.internal.telephony.uicc.UsimServiceTable;
 import com.android.internal.telephony.SmsStorageMonitor;
 import com.android.internal.telephony.SmsUsageMonitor;
 import com.android.internal.telephony.TelephonyProperties;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static android.telephony.SmsMessage.MessageClass;
 
-public final class GsmSMSDispatcher extends SMSDispatcher {
+public class GsmSMSDispatcher extends SMSDispatcher {
     private static final String TAG = "GSM";
+    private ImsSMSDispatcher mImsSMSDispatcher;
+    protected UiccController mUiccController = null;
+    private AtomicReference<IccRecords> mIccRecords = new AtomicReference<IccRecords>();
+    private AtomicReference<UiccCardApplication> mUiccApplication =
+            new AtomicReference<UiccCardApplication>();
 
     /** Status report received */
     private static final int EVENT_NEW_SMS_STATUS_REPORT = 100;
@@ -64,12 +76,16 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
     private final UsimDataDownloadHandler mDataDownloadHandler;
 
     public GsmSMSDispatcher(PhoneBase phone, SmsStorageMonitor storageMonitor,
-            SmsUsageMonitor usageMonitor) {
+            SmsUsageMonitor usageMonitor, ImsSMSDispatcher imsSMSDispatcher) {
         super(phone, storageMonitor, usageMonitor);
+        mImsSMSDispatcher = imsSMSDispatcher;
         mDataDownloadHandler = new UsimDataDownloadHandler(mCm);
         mCm.setOnNewGsmSms(this, EVENT_NEW_SMS, null);
         mCm.setOnSmsStatus(this, EVENT_NEW_SMS_STATUS_REPORT, null);
         mCm.setOnNewGsmBroadcastSms(this, EVENT_NEW_BROADCAST_SMS, null);
+        mUiccController = UiccController.getInstance();
+        mUiccController.registerForIccChanged(this, EVENT_ICC_CHANGED, null);
+        Log.d(TAG, "GsmSMSDispatcher created");
     }
 
     @Override
@@ -113,6 +129,15 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
             }
             break;
 
+        case EVENT_NEW_ICC_SMS:
+            ar = (AsyncResult)msg.obj;
+            dispatchMessage((SmsMessage)ar.result);
+            break;
+
+        case EVENT_ICC_CHANGED:
+            onUpdateIccAvailability();
+            break;
+
         default:
             super.handleMessage(msg);
         }
@@ -142,7 +167,7 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
                     PendingIntent intent = tracker.mDeliveryIntent;
                     Intent fillIn = new Intent();
                     fillIn.putExtra("pdu", IccUtils.hexStringToBytes(pduString));
-                    fillIn.putExtra("format", android.telephony.SmsMessage.FORMAT_3GPP);
+                    fillIn.putExtra("format", getFormat());
                     try {
                         intent.send(mContext, Activity.RESULT_OK, fillIn);
                     } catch (CanceledException ex) {}
@@ -157,7 +182,7 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
 
     /** {@inheritDoc} */
     @Override
-    public int dispatchMessage(SmsMessageBase smsb) {
+    protected int dispatchMessage(SmsMessageBase smsb) {
 
         // If sms is null, means there was a parsing error.
         if (smsb == null) {
@@ -207,13 +232,13 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
         // Special case the message waiting indicator messages
         boolean handled = false;
         if (sms.isMWISetMessage()) {
-            mPhone.setVoiceMessageWaiting(1, -1);  // line 1: unknown number of msgs waiting
+            updateMessageWaitingIndicator(sms.getNumOfVoicemails());
             handled = sms.isMwiDontStore();
             if (false) {
                 Log.d(TAG, "Received voice mail indicator set SMS shouldStore=" + !handled);
             }
         } else if (sms.isMWIClearMessage()) {
-            mPhone.setVoiceMessageWaiting(1, 0);   // line 1: no msgs waiting
+            updateMessageWaitingIndicator(0);
             handled = sms.isMwiDontStore();
             if (false) {
                 Log.d(TAG, "Received voice mail indicator clear SMS shouldStore=" + !handled);
@@ -224,7 +249,7 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
             return Intents.RESULT_SMS_HANDLED;
         }
 
-        if (!mStorageMonitor.isStorageAvailable() &&
+        if (((mStorageMonitor != null) && !mStorageMonitor.isStorageAvailable()) &&
                 sms.getMessageClass() != MessageClass.CLASS_0) {
             // It's a storable message and there's no storage available.  Bail.
             // (See TS 23.038 for a description of class 0 messages.)
@@ -234,6 +259,27 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
         return dispatchNormalMessage(smsb);
     }
 
+    /* package */void updateMessageWaitingIndicator(int mwi) {
+        Message onComplete;
+        // range check
+        if (mwi < 0) {
+            mwi = -1;
+        } else if (mwi > 0xff) {
+            // TS 23.040 9.2.3.24.2
+            // "The value 255 shall be taken to mean 255 or greater"
+            mwi = 0xff;
+        }
+        // update voice mail count in GsmPhone
+        ((PhoneBase)mPhone).setVoiceMessageCount(mwi);
+        // store voice mail count in SIM/preferences
+        if (mIccRecords.get() != null) {
+            onComplete = obtainMessage(EVENT_UPDATE_ICC_MWI);
+            mIccRecords.get().setVoiceMessageWaiting(1, mwi, onComplete);
+        } else {
+            Log.d(TAG, "SIM Records not found, MWI not updated");
+        }
+    }
+
     /** {@inheritDoc} */
     @Override
     protected void sendData(String destAddr, String scAddr, int destPort,
@@ -241,8 +287,10 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
         SmsMessage.SubmitPdu pdu = SmsMessage.getSubmitPdu(
                 scAddr, destAddr, destPort, data, (deliveryIntent != null));
         if (pdu != null) {
-            sendRawPdu(pdu.encodedScAddress, pdu.encodedMessage, sentIntent, deliveryIntent,
-                    destAddr);
+            HashMap map =  SmsTrackerMapFactory(destAddr, scAddr, destPort, data, pdu);
+            SmsTracker tracker = SmsTrackerFactory(map, sentIntent, deliveryIntent,
+                    getFormat());
+            sendRawPdu(tracker);
         } else {
             Log.e(TAG, "GsmSMSDispatcher.sendData(): getSubmitPdu() returned null");
         }
@@ -254,10 +302,19 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
             PendingIntent sentIntent, PendingIntent deliveryIntent) {
         SmsMessage.SubmitPdu pdu = SmsMessage.getSubmitPdu(
                 scAddr, destAddr, text, (deliveryIntent != null));
+        Log.d(TAG, "sendText ==dispatcher======== destAddr = " + destAddr + ",scAddr = " + scAddr + 
+				",text = " + text + ",sentIntent = " + sentIntent + 
+				",deliveryIntent = " + deliveryIntent);
         if (pdu != null) {
-            sendRawPdu(pdu.encodedScAddress, pdu.encodedMessage, sentIntent, deliveryIntent,
-                    destAddr);
+        	 Log.d(TAG, "sendText ==111==dispatcher========pdu != null");
+            HashMap map =  SmsTrackerMapFactory(destAddr, scAddr, text, pdu);
+            Log.d(TAG, "sendText ==2222222==map========map = " + map);
+            SmsTracker tracker = SmsTrackerFactory(map, sentIntent, deliveryIntent,
+                    getFormat());
+            Log.d(TAG, "sendText ==3333==tracker========tracker = " + tracker);
+            sendRawPdu(tracker);
         } else {
+        	 Log.d(TAG, "sendText ==222==dispatcher========pdu == null");
             Log.e(TAG, "GsmSMSDispatcher.sendText(): getSubmitPdu() returned null");
         }
     }
@@ -278,8 +335,11 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
                 message, deliveryIntent != null, SmsHeader.toByteArray(smsHeader),
                 encoding, smsHeader.languageTable, smsHeader.languageShiftTable);
         if (pdu != null) {
-            sendRawPdu(pdu.encodedScAddress, pdu.encodedMessage, sentIntent, deliveryIntent,
-                    destinationAddress);
+            HashMap map =  SmsTrackerMapFactory(destinationAddress, scAddress,
+                    message, pdu);
+            SmsTracker tracker = SmsTrackerFactory(map, sentIntent,
+                    deliveryIntent, getFormat());
+            sendRawPdu(tracker);
         } else {
             Log.e(TAG, "GsmSMSDispatcher.sendNewSubmitPdu(): getSubmitPdu() returned null");
         }
@@ -294,9 +354,45 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
         byte pdu[] = (byte[]) map.get("pdu");
 
         Message reply = obtainMessage(EVENT_SEND_SMS_COMPLETE, tracker);
-        mCm.sendSMS(IccUtils.bytesToHexString(smsc), IccUtils.bytesToHexString(pdu), reply);
+
+        Log.d(TAG, "sendSms: "
+                +" isIms()="+isIms()
+                +" mRetryCount="+tracker.mRetryCount
+                +" mImsRetry="+tracker.mImsRetry
+                +" mMessageRef="+tracker.mMessageRef
+                +" SS=" +mPhone.getServiceState().getState());
+
+        // sms over gsm is used:
+        //   if sms over IMS is not supported AND
+        //   this is not a retry case after sms over IMS failed
+        //     indicated by mImsRetry > 0
+        if (0 == tracker.mImsRetry && !isIms()) {
+            if (tracker.mRetryCount > 0) {
+                // per TS 23.040 Section 9.2.3.6:  If TP-MTI SMS-SUBMIT (0x01) type
+                //   TP-RD (bit 2) is 1 for retry
+                //   and TP-MR is set to previously failed sms TP-MR
+                if (((0x01 & pdu[0]) == 0x01)) {
+                    pdu[0] |= 0x04; // TP-RD
+                    pdu[1] = (byte) tracker.mMessageRef; // TP-MR
+                }
+            }
+            mCm.sendSMS(IccUtils.bytesToHexString(smsc),
+                    IccUtils.bytesToHexString(pdu), reply);
+        } else {
+            mCm.sendImsGsmSms(IccUtils.bytesToHexString(smsc),
+                    IccUtils.bytesToHexString(pdu), tracker.mImsRetry,
+                    tracker.mMessageRef, reply);
+            // increment it here, so in case of SMS_FAIL_RETRY over IMS
+            // next retry will be sent using IMS request again.
+            tracker.mImsRetry++;
+        }
     }
 
+    @Override
+    public void sendRetrySms(SmsTracker tracker) {
+        //re-routing to ImsSMSDispatcher
+        mImsSMSDispatcher.sendRetrySms(tracker);
+    }
     /** {@inheritDoc} */
     @Override
     protected void acknowledgeLastIncomingSms(boolean success, int result, Message response) {
@@ -314,6 +410,38 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
             case Intents.RESULT_SMS_GENERIC_ERROR:
             default:
                 return CommandsInterface.GSM_SMS_FAIL_CAUSE_UNSPECIFIED_ERROR;
+        }
+    }
+
+    protected UiccCardApplication getUiccCardApplication() {
+        return mUiccController.getUiccCardApplication(UiccController.APP_FAM_3GPP);
+    }
+
+    private void onUpdateIccAvailability() {
+        if (mUiccController == null ) {
+            return;
+        }
+
+        UiccCardApplication newUiccApplication = getUiccCardApplication();
+
+        UiccCardApplication app = mUiccApplication.get();
+        if (app != newUiccApplication) {
+            if (app != null) {
+                Log.d(TAG, "Removing stale icc objects.");
+                if (mIccRecords.get() != null) {
+                    mIccRecords.get().unregisterForNewSms(this);
+                }
+                mIccRecords.set(null);
+                mUiccApplication.set(null);
+            }
+            if (newUiccApplication != null) {
+                Log.d(TAG, "New Uicc application found");
+                mUiccApplication.set(newUiccApplication);
+                mIccRecords.set(newUiccApplication.getIccRecords());
+                if (mIccRecords.get() != null) {
+                    mIccRecords.get().registerForNewSms(this, EVENT_NEW_ICC_SMS, null);
+                }
+            }
         }
     }
 
@@ -394,9 +522,14 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
 
             SmsCbHeader header = new SmsCbHeader(receivedPdu);
             String plmn = SystemProperties.get(TelephonyProperties.PROPERTY_OPERATOR_NUMERIC);
-            GsmCellLocation cellLocation = (GsmCellLocation) mPhone.getCellLocation();
-            int lac = cellLocation.getLac();
-            int cid = cellLocation.getCid();
+            int lac = -1;
+            int cid = -1;
+            CellLocation cl = mPhone.getCellLocation();
+            if (cl instanceof GsmCellLocation) {
+                GsmCellLocation cellLocation = (GsmCellLocation)cl;
+                lac = cellLocation.getLac();
+                cid = cellLocation.getCid();
+            }
 
             SmsCbLocation location;
             switch (header.getGeographicalScope()) {
@@ -468,5 +601,15 @@ public final class GsmSMSDispatcher extends SMSDispatcher {
         } catch (RuntimeException e) {
             Log.e(TAG, "Error in decoding SMS CB pdu", e);
         }
+    }
+
+    @Override
+    public boolean isIms() {
+        return mImsSMSDispatcher.isIms();
+    }
+
+    @Override
+    public String getImsSmsFormat() {
+        return mImsSMSDispatcher.getImsSmsFormat();
     }
 }
