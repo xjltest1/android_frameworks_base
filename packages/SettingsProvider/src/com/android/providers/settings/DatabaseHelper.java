@@ -33,6 +33,7 @@ import android.net.ConnectivityManager;
 import android.os.SystemProperties;
 import android.provider.Settings;
 import android.provider.Settings.Secure;
+import android.telephony.MSimTelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -1643,8 +1644,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 type = SystemProperties.getInt("ro.telephony.default_network",
                         RILConstants.PREFERRED_NETWORK_MODE);
             }
-            loadSetting(stmt, Settings.Secure.PREFERRED_NETWORK_MODE, type);
-
+            //loadSetting(stmt, Settings.Secure.PREFERRED_NETWORK_MODE, type);
+            String val = Integer.toString(type);
+            if (MSimTelephonyManager.getDefault().isMultiSimEnabled()) {
+                   val = type + "," + type;
+            }
+            loadSetting(stmt, Settings.Secure.PREFERRED_NETWORK_MODE, val);
+            
             // Enable or disable Cell Broadcast SMS
             loadSetting(stmt, Settings.Secure.CDMA_CELL_BROADCAST_SMS,
                     RILConstants.CDMA_CELL_BROADCAST_SMS_DISABLED);

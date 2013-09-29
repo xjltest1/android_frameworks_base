@@ -60,6 +60,8 @@
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
     <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
 
+	<supports-screens android:largeScreens="true" android:normalScreens="true"
+     android:smallScreens="true" android:anyDensity="true"/>
     <application
         android:persistent="true"
         android:allowClearUserData="false"
