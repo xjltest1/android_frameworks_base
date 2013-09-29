@@ -85,8 +85,8 @@ interface IAudioService {
     boolean shouldVibrate(int vibrateType);
 
     void setMode(int mode, IBinder cb);
-
-    void setInCallMode(int state, IBinder cb);
+ 	
+ 	void setInCallMode(int state, IBinder cb);
 
     int getMode();
 
