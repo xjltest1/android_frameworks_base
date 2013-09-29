@@ -21,6 +21,8 @@ import android.util.Log;
 
 import com.android.internal.telephony.DataConnection;
 import com.android.internal.telephony.DataConnectionTracker;
+import com.android.internal.telephony.DataProfile;
+import com.android.internal.telephony.DataProfile.DataProfileType;
 import com.android.internal.telephony.Phone;
 import com.android.internal.telephony.RILConstants;
 import com.android.internal.telephony.RetryManager;
@@ -76,13 +78,22 @@ public class CdmaDataConnection extends DataConnection {
         createTime = -1;
         lastFailTime = -1;
         lastFailCause = FailCause.NONE;
+
+        // TODO: The data profile's profile ID must be set when it is created.
         int dataProfile;
-        if ((cp.apn != null) && (cp.apn.types.length > 0) && (cp.apn.types[0] != null) &&
+        if ((cp.apn != null) && (cp.apn.types != null) &&
+                (cp.apn.types.length > 0) && (cp.apn.types[0] != null) &&
                 (cp.apn.types[0].equals(Phone.APN_TYPE_DUN))) {
             if (DBG) log("CdmaDataConnection using DUN");
             dataProfile = RILConstants.DATA_PROFILE_TETHERED;
         } else {
             dataProfile = RILConstants.DATA_PROFILE_DEFAULT;
+        }
+
+        if (cp.apn.getDataProfileType() == DataProfileType.PROFILE_TYPE_OMH) {
+            dataProfile = cp.apn.getProfileId() + RILConstants.DATA_PROFILE_OEM_BASE;
+        } else {
+            mApn.setProfileId(dataProfile);
         }
 
         // msg.obj will be returned in AsyncResult.userObj;
@@ -91,9 +102,9 @@ public class CdmaDataConnection extends DataConnection {
         phone.mCM.setupDataCall(
                 Integer.toString(getRilRadioTechnology(RILConstants.SETUP_DATA_TECH_CDMA)),
                 Integer.toString(dataProfile),
-                null, null, null,
-                Integer.toString(RILConstants.SETUP_DATA_AUTH_PAP_CHAP),
-                RILConstants.SETUP_DATA_PROTOCOL_IP, msg);
+                mApn.apn, mApn.user, mApn.password,
+                Integer.toString(mApn.authType),
+                mApn.protocol, msg);
     }
 
     @Override
