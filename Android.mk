@@ -32,19 +32,20 @@ framework_res_source_path := APPS/framework-res_intermediates/src
 # These will be included in framework2 to avoid issues with the limit
 # on the number of classes/dex
 SECONDARY_FRAMEWORKS_SUBDIRS := \
+       media/mca/effect \
+       media/mca/filterfw \
+       media/mca/filterpacks \
         core/java/android/test \
         core/java/android/gesture \
         core/java/android/speech/srec \
         media/java/android/media/videoeditor \
         media/java/android/media/audiofx \
-        media/mca/effect/java/android/media/effect \
-        media/mca/effect/java/android/media/effect/effects \
         voip/java/com/android/server/sip \
         core/java/com/android/internal/widget/multiwaveview \
         core/java/com/android/internal/util/weather \
-        core/java/com/android/internal/http/multipart
-
-
+        core/java/com/android/internal/http/multipart \
+	telephony/java/com/android/internal/telephony/msim \
+	telephony/java/com/android/internal/telephony/test
 
 include $(CLEAR_VARS)
 
@@ -225,10 +226,16 @@ LOCAL_SRC_FILES += \
 	media/java/android/media/IRingtonePlayer.aidl \
 	telephony/java/com/android/internal/telephony/IPhoneStateListener.aidl \
 	telephony/java/com/android/internal/telephony/IPhoneSubInfo.aidl \
+	telephony/java/com/android/internal/telephony/IOemHookCallback.aidl \
 	telephony/java/com/android/internal/telephony/ITelephony.aidl \
 	telephony/java/com/android/internal/telephony/ITelephonyRegistry.aidl \
 	telephony/java/com/android/internal/telephony/IIccPhoneBook.aidl \
 	telephony/java/com/android/internal/telephony/ISms.aidl \
+	telephony/java/com/android/internal/telephony/ITelephonyRegistryMSim.aidl \
+	telephony/java/com/android/internal/telephony/msim/IIccPhoneBookMSim.aidl \
+	telephony/java/com/android/internal/telephony/msim/IPhoneSubInfoMSim.aidl \
+	telephony/java/com/android/internal/telephony/msim/ISmsMSim.aidl \
+	telephony/java/com/android/internal/telephony/msim/ITelephonyMSim.aidl \
 	telephony/java/com/android/internal/telephony/IWapPushManager.aidl \
 	wifi/java/android/net/wifi/IWifiManager.aidl \
 	wifi/java/android/net/wifi/p2p/IWifiP2pManager.aidl \
