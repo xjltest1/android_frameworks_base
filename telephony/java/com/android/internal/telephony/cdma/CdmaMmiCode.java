@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006 The Android Open Source Project
+ * Copyright (c) 2012 Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +20,10 @@ package com.android.internal.telephony.cdma;
 import android.content.Context;
 
 import com.android.internal.telephony.CommandException;
+import com.android.internal.telephony.uicc.UiccCardApplication;
+import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppState;
 import com.android.internal.telephony.MmiCode;
+import com.android.internal.telephony.Phone;
 
 import android.os.AsyncResult;
 import android.os.Handler;
@@ -43,8 +47,11 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
     // From TS 22.030 6.5.2
     static final String ACTION_REGISTER = "**";
 
-    // Supp Service codes from TS 22.030 Annex B
+    // PIN/PIN2/PUK/PUK2
+    static final String SC_PIN          = "04";
+    static final String SC_PIN2         = "042";
     static final String SC_PUK          = "05";
+    static final String SC_PUK2         = "052";
 
     // Event Constant
 
@@ -54,6 +61,7 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
 
     CDMAPhone phone;
     Context context;
+    UiccCardApplication mUiccApplication;
 
     String action;              // ACTION_REGISTER
     String sc;                  // Service Code
@@ -98,7 +106,7 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
      */
 
     public static CdmaMmiCode
-    newFromDialString(String dialString, CDMAPhone phone) {
+    newFromDialString(String dialString, CDMAPhone phone, UiccCardApplication app) {
         Matcher m;
         CdmaMmiCode ret = null;
 
@@ -106,7 +114,7 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
 
         // Is this formatted like a standard supplementary service code?
         if (m.matches()) {
-            ret = new CdmaMmiCode(phone);
+            ret = new CdmaMmiCode(phone, app);
             ret.poundString = makeEmptyNull(m.group(MATCH_GROUP_POUND_STRING));
             ret.action = makeEmptyNull(m.group(MATCH_GROUP_ACTION));
             ret.sc = makeEmptyNull(m.group(MATCH_GROUP_SERVICE_CODE));
@@ -135,10 +143,11 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
 
     // Constructor
 
-    CdmaMmiCode (CDMAPhone phone) {
+    CdmaMmiCode (CDMAPhone phone, UiccCardApplication app) {
         super(phone.getHandler().getLooper());
         this.phone = phone;
         this.context = phone.getContext();
+        mUiccApplication = app;
     }
 
     // MmiCode implementation
@@ -151,6 +160,11 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
     public CharSequence
     getMessage() {
         return message;
+    }
+
+    public Phone
+    getPhone() {
+        return ((Phone) phone);
     }
 
     // inherited javadoc suffices
@@ -174,8 +188,9 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
     /**
      * @return true if the Service Code is PIN/PIN2/PUK/PUK2-related
      */
-    boolean isPukCommand() {
-        return sc != null && sc.equals(SC_PUK);
+    boolean isPinCommand() {
+        return sc != null && (sc.equals(SC_PIN) || sc.equals(SC_PIN2)
+                              || sc.equals(SC_PUK) || sc.equals(SC_PUK2));
      }
 
     boolean isRegister() {
@@ -191,8 +206,8 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
     void
     processCode () {
         try {
-            if (isPukCommand()) {
-                // sia = old PUK
+            if (isPinCommand()) {
+                // sia = old PIN or PUK
                 // sib = new PIN
                 // sic = new PIN
                 String oldPinOrPuk = sia;
@@ -205,9 +220,30 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
                     } else if (pinLen < 4 || pinLen > 8 ) {
                         // invalid length
                         handlePasswordError(com.android.internal.R.string.invalidPin);
+                    } else if (sc.equals(SC_PIN)
+                            && mUiccApplication != null
+                            && mUiccApplication.getState() == AppState.APPSTATE_PUK) {
+                        // Sim is puk-locked
+                        handlePasswordError(com.android.internal.R.string.needPuk);
                     } else {
-                        phone.mCM.supplyIccPuk(oldPinOrPuk, newPin,
-                                obtainMessage(EVENT_SET_COMPLETE, this));
+                        // pre-checks OK
+                        if (sc.equals(SC_PIN)) {
+                            if (mUiccApplication != null)
+                                mUiccApplication.changeIccLockPassword(oldPinOrPuk, newPin,
+                                        obtainMessage(EVENT_SET_COMPLETE, this));
+                        } else if (sc.equals(SC_PIN2)) {
+                            if (mUiccApplication != null)
+                                mUiccApplication.changeIccFdnPassword(oldPinOrPuk, newPin,
+                                        obtainMessage(EVENT_SET_COMPLETE, this));
+                        } else if (sc.equals(SC_PUK)) {
+                            if (mUiccApplication != null)
+                                mUiccApplication.supplyPuk(oldPinOrPuk, newPin,
+                                        obtainMessage(EVENT_SET_COMPLETE, this));
+                        } else if (sc.equals(SC_PUK2)) {
+                            if (mUiccApplication != null)
+                                mUiccApplication.supplyPuk2(oldPinOrPuk, newPin,
+                                        obtainMessage(EVENT_SET_COMPLETE, this));
+                        }
                     }
                 } else {
                     throw new RuntimeException ("Invalid or Unsupported MMI Code");
@@ -246,7 +282,7 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
 
     private CharSequence getScString() {
         if (sc != null) {
-            if (isPukCommand()) {
+            if (isPinCommand()) {
                 return context.getText(com.android.internal.R.string.PinMmi);
             }
         }
@@ -264,12 +300,17 @@ public final class CdmaMmiCode  extends Handler implements MmiCode {
             if (ar.exception instanceof CommandException) {
                 CommandException.Error err = ((CommandException)(ar.exception)).getCommandError();
                 if (err == CommandException.Error.PASSWORD_INCORRECT) {
-                    if (isPukCommand()) {
+                    if (isPinCommand()) {
                         sb.append(context.getText(
                                 com.android.internal.R.string.badPuk));
                     } else {
                         sb.append(context.getText(
                                 com.android.internal.R.string.passwordIncorrect));
+                    }
+                } else if (err == CommandException.Error.REQUEST_NOT_SUPPORTED) {
+                    if (sc.equals(SC_PIN)) {
+                        sb.append(context.getText(
+                            com.android.internal.R.string.enablePin));
                     }
                 } else {
                     sb.append(context.getText(
