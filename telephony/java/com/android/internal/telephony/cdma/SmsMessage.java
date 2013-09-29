@@ -24,7 +24,6 @@ import android.telephony.SmsCbMessage;
 import android.telephony.cdma.CdmaSmsCbProgramData;
 import android.util.Log;
 
-import com.android.internal.telephony.IccUtils;
 import com.android.internal.telephony.SmsHeader;
 import com.android.internal.telephony.SmsMessageBase;
 import com.android.internal.telephony.TelephonyProperties;
@@ -33,6 +32,7 @@ import com.android.internal.telephony.cdma.sms.CdmaSmsAddress;
 import com.android.internal.telephony.cdma.sms.CdmaSmsSubaddress;
 import com.android.internal.telephony.cdma.sms.SmsEnvelope;
 import com.android.internal.telephony.cdma.sms.UserData;
+import com.android.internal.telephony.uicc.IccUtils;
 import com.android.internal.util.BitwiseInputStream;
 import com.android.internal.util.HexDump;
 
@@ -42,7 +42,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 import static android.telephony.SmsMessage.MessageClass;
@@ -111,6 +110,9 @@ public class SmsMessage extends SmsMessageBase {
             return msg;
         } catch (RuntimeException ex) {
             Log.e(LOG_TAG, "SMS PDU parsing failed: ", ex);
+            return null;
+        } catch (OutOfMemoryError e) {
+            Log.e(LOG_TAG, "SMS PDU parsing failed with out of memory: ", e);
             return null;
         }
     }
@@ -469,13 +471,7 @@ public class SmsMessage extends SmsMessageBase {
      *  {@link com.android.internal.telephony.cdma.sms.SmsEnvelope#MESSAGE_TYPE_ACKNOWLEDGE},
     */
     /* package */ int getMessageType() {
-        // NOTE: mEnvelope.messageType is not set correctly for cell broadcasts with some RILs.
-        // Use the service category parameter to detect CMAS and other cell broadcast messages.
-        if (mEnvelope.serviceCategory != 0) {
-            return SmsEnvelope.MESSAGE_TYPE_BROADCAST;
-        } else {
-            return SmsEnvelope.MESSAGE_TYPE_POINT_TO_POINT;
-        }
+        return mEnvelope.messageType;
     }
 
     /**
@@ -504,6 +500,13 @@ public class SmsMessage extends SmsMessageBase {
 
             length = dis.readByte();
             addr.numberOfDigits = length;
+
+            // sanity check on the length
+            if (length > pdu.length) {
+                throw new RuntimeException(
+                        "createFromPdu: Invalid pdu, addr.numberOfDigits " + length
+                        + " > pdu len " + pdu.length);
+            }
             addr.origBytes = new byte[length];
             dis.read(addr.origBytes, 0, length); // digits
 
@@ -515,11 +518,18 @@ public class SmsMessage extends SmsMessageBase {
 
             //encoded BearerData:
             bearerDataLength = dis.readInt();
+            // sanity check on the length
+            if (bearerDataLength > pdu.length) {
+                throw new RuntimeException(
+                        "createFromPdu: Invalid pdu, bearerDataLength " + bearerDataLength
+                        + " > pdu len " + pdu.length);
+            }
             env.bearerData = new byte[bearerDataLength];
             dis.read(env.bearerData, 0, bearerDataLength);
             dis.close();
-        } catch (Exception ex) {
-            Log.e(LOG_TAG, "createFromPdu: conversion from byte array to object failed: " + ex);
+        } catch (IOException ex) {
+            throw new RuntimeException(
+                    "createFromPdu: conversion from byte array to object failed: " + ex, ex);
         }
 
         // link the filled objects to this SMS
@@ -782,7 +792,7 @@ public class SmsMessage extends SmsMessageBase {
      * binder-call, and hence should be thread-safe, it has been
      * synchronized.
      */
-    synchronized static int getNextMessageId() {
+    private synchronized static int getNextMessageId() {
         // Testing and dialog with partners has indicated that
         // msgId==0 is (sometimes?) treated specially by lower levels.
         // Specifically, the ID is not preserved for delivery ACKs.
@@ -985,6 +995,7 @@ public class SmsMessage extends SmsMessageBase {
     /* package */ byte[] getIncomingSmsFingerprint() {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
 
+        output.write(mEnvelope.serviceCategory);
         output.write(mEnvelope.teleService);
         output.write(mEnvelope.origAddress.origBytes, 0, mEnvelope.origAddress.origBytes.length);
         output.write(mEnvelope.bearerData, 0, mEnvelope.bearerData.length);
@@ -998,7 +1009,7 @@ public class SmsMessage extends SmsMessageBase {
      * Returns the list of service category program data, if present.
      * @return a list of CdmaSmsCbProgramData objects, or null if not present
      */
-    ArrayList<CdmaSmsCbProgramData> getSmsCbProgramData() {
+    List<CdmaSmsCbProgramData> getSmsCbProgramData() {
         return mBearerData.serviceCategoryProgramData;
     }
 }
