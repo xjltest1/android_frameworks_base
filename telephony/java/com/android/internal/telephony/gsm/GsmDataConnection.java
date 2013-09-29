@@ -27,6 +27,7 @@ import com.android.internal.telephony.Phone;
 import com.android.internal.telephony.PhoneBase;
 import com.android.internal.telephony.RILConstants;
 import com.android.internal.telephony.RetryManager;
+import com.android.internal.telephony.ApnSetting;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -77,9 +78,9 @@ public class GsmDataConnection extends DataConnection {
     void onConnect(ConnectionParams cp) {
         mApn = cp.apn;
 
-        if (DBG) log("Connecting to carrier: '" + mApn.carrier
+        if (DBG) log("Connecting to carrier: '" + ((ApnSetting)mApn).carrier
                 + "' APN: '" + mApn.apn
-                + "' proxy: '" + mApn.proxy + "' port: '" + mApn.port);
+                + "' proxy: '" + ((ApnSetting)mApn).proxy + "' port: '" + ((ApnSetting)mApn).port);
 
         createTime = -1;
         lastFailTime = -1;
@@ -89,24 +90,22 @@ public class GsmDataConnection extends DataConnection {
         Message msg = obtainMessage(EVENT_SETUP_DATA_CONNECTION_DONE, cp);
         msg.obj = cp;
 
-        int authType = mApn.authType;
-        if (authType == -1) {
-            authType = TextUtils.isEmpty(mApn.user) ? RILConstants.SETUP_DATA_AUTH_NONE
-                    : RILConstants.SETUP_DATA_AUTH_PAP_CHAP;
-        }
-
         String protocol;
         if (phone.getServiceState().getRoaming()) {
             protocol = mApn.roamingProtocol;
         } else {
             protocol = mApn.protocol;
         }
-
-        phone.mCM.setupDataCall(
-                Integer.toString(getRilRadioTechnology(RILConstants.SETUP_DATA_TECH_GSM)),
+        String str2 = Integer.toString(getRilRadioTechnology(RILConstants.SETUP_DATA_TECH_GSM));
+        if (this.phone.getServiceState().getRadioTechnology() == 13){
+        	str2 = Integer.toString(getRilRadioTechnology(0));
+        }
+        
+        phone.mCM.setupDataCall(str2
+                ,
                 Integer.toString(mProfileId),
                 mApn.apn, mApn.user, mApn.password,
-                Integer.toString(authType),
+                Integer.toString(mApn.authType),
                 protocol, msg);
     }
 
@@ -136,11 +135,11 @@ public class GsmDataConnection extends DataConnection {
             // if Proxy is an IP-address.
             // Otherwise, the default APN will not be restored anymore.
             if (!mApn.types[0].equals(Phone.APN_TYPE_MMS)
-                || !isIpAddress(mApn.mmsProxy)) {
+                || !isIpAddress(((ApnSetting)mApn).mmsProxy)) {
                 log(String.format(
                         "isDnsOk: return false apn.types[0]=%s APN_TYPE_MMS=%s isIpAddress(%s)=%s",
-                        mApn.types[0], Phone.APN_TYPE_MMS, mApn.mmsProxy,
-                        isIpAddress(mApn.mmsProxy)));
+                        mApn.types[0], Phone.APN_TYPE_MMS, ((ApnSetting)mApn).mmsProxy,
+                        isIpAddress(((ApnSetting)mApn).mmsProxy)));
                 return false;
             }
         }
