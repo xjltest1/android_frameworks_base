@@ -16,7 +16,7 @@
 
 package com.android.internal.telephony.cat;
 
-import com.android.internal.telephony.IccFileHandler;
+import com.android.internal.telephony.uicc.IccFileHandler;
 
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -79,12 +79,17 @@ class IconLoader extends Handler {
         if (sLoader != null) {
             return sLoader;
         }
-        if (fh != null) {
-            HandlerThread thread = new HandlerThread("Cat Icon Loader");
-            thread.start();
-            return new IconLoader(thread.getLooper(), fh);
+
+        HandlerThread thread = new HandlerThread("Cat Icon Loader");
+        thread.start();
+        sLoader = new IconLoader(thread.getLooper(), fh);
+        return sLoader;
+    }
+
+    public void updateIccFileHandler(IccFileHandler fh) {
+        if (fh != null && fh != mSimFH) {
+            mSimFH = fh;
         }
-        return null;
     }
 
     void loadIcons(int[] recordNumbers, Message msg) {
@@ -151,6 +156,9 @@ class IconLoader extends Handler {
                 } else if (mId.codingScheme == ImageDescriptor.CODING_SCHEME_COLOUR) {
                     mIconData = rawData;
                     readClut();
+                } else {
+                    // post null icon back to the caller.
+                    postIcon();
                 }
                 break;
             case EVENT_READ_CLUT_DONE:
