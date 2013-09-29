@@ -22,8 +22,8 @@ import android.os.ServiceManager;
 import android.text.TextUtils;
 
 import com.android.internal.telephony.ISms;
-import com.android.internal.telephony.IccConstants;
 import com.android.internal.telephony.SmsRawData;
+import com.android.internal.telephony.uicc.IccConstants;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -98,8 +98,13 @@ public final class SmsManager {
      * @param text the original message.  Must not be null.
      * @return an <code>ArrayList</code> of strings that, in order,
      *   comprise the original message
+     *
+     * @throws IllegalArgumentException if text is null
      */
     public ArrayList<String> divideMessage(String text) {
+        if (null == text) {
+            throw new IllegalArgumentException("text is null");
+        }
         return SmsMessage.fragmentText(text);
     }
 
@@ -242,11 +247,15 @@ public final class SmsManager {
      *               STATUS_ON_ICC_SENT, STATUS_ON_ICC_UNSENT)
      * @return true for success
      *
+     * @throws IllegalArgumentException if pdu is NULL
      * {@hide}
      */
     public boolean copyMessageToIcc(byte[] smsc, byte[] pdu, int status) {
         boolean success = false;
 
+        if (null == pdu) {
+            throw new IllegalArgumentException("pdu is NULL");
+        }
         try {
             ISms iccISms = ISms.Stub.asInterface(ServiceManager.getService("isms"));
             if (iccISms != null) {
@@ -414,11 +423,15 @@ public final class SmsManager {
      * @return true if successful, false otherwise
      * @see #disableCellBroadcastRange(int, int)
      *
+     * @throws IllegalArgumentException if endMessageId < startMessageId
      * {@hide}
      */
     public boolean enableCellBroadcastRange(int startMessageId, int endMessageId) {
         boolean success = false;
 
+        if (endMessageId < startMessageId) {
+            throw new IllegalArgumentException("endMessageId < startMessageId");
+        }
         try {
             ISms iccISms = ISms.Stub.asInterface(ServiceManager.getService("isms"));
             if (iccISms != null) {
@@ -445,15 +458,142 @@ public final class SmsManager {
      *
      * @see #enableCellBroadcastRange(int, int)
      *
+     * @throws IllegalArgumentException if endMessageId < startMessageId
      * {@hide}
      */
     public boolean disableCellBroadcastRange(int startMessageId, int endMessageId) {
         boolean success = false;
 
+        if (endMessageId < startMessageId) {
+            throw new IllegalArgumentException("endMessageId < startMessageId");
+        }
         try {
             ISms iccISms = ISms.Stub.asInterface(ServiceManager.getService("isms"));
             if (iccISms != null) {
                 success = iccISms.disableCellBroadcastRange(startMessageId, endMessageId);
+            }
+        } catch (RemoteException ex) {
+            // ignore it
+        }
+
+        return success;
+    }
+
+    /**
+     * Enable reception of cdma broadcast messages with the given message
+     * identifier. Note that if two different clients enable the same message
+     * identifier, they must both disable it for the device to stop receiving
+     * those messages. All received messages will be broadcast in an intent with
+     * the action "android.provider.telephony.SMS_CB_RECEIVED".
+     * Note: This call is blocking, callers may want to avoid calling it from
+     * the main thread of an application.
+     *
+     * @param messageIdentifier Message identifier as specified in C.R1001-G
+     * @return true if successful, false otherwise
+     * @see #disableCdmaBroadcast(int) {@hide}
+     */
+    public boolean enableCdmaBroadcast(int messageIdentifier) {
+        boolean success = false;
+
+        try {
+            ISms iccISms = ISms.Stub.asInterface(ServiceManager.getService("isms"));
+            if (iccISms != null) {
+                success = iccISms.enableCdmaBroadcast(messageIdentifier);
+            }
+        } catch (RemoteException ex) {
+            // ignore it
+        }
+
+        return success;
+    }
+
+    /**
+     * Disable reception of cdma broadcast messages with the given message
+     * identifier. Note that if two different clients enable the same message
+     * identifier, they must both disable it for the device to stop receiving
+     * those messages. Note: This call is blocking, callers may want to avoid
+     * calling it from the main thread of an application.
+     *
+     * @param messageIdentifier Message identifier as specified in C.R1001-G
+     * @return true if successful, false otherwise
+     * @see #enableCdmaBroadcast(int) {@hide}
+     */
+    public boolean disableCdmaBroadcast(int messageIdentifier) {
+        boolean success = false;
+
+        try {
+            ISms iccISms = ISms.Stub.asInterface(ServiceManager.getService("isms"));
+            if (iccISms != null) {
+                success = iccISms.disableCdmaBroadcast(messageIdentifier);
+            }
+        } catch (RemoteException ex) {
+            // ignore it
+        }
+
+        return success;
+    }
+
+    /**
+     * Enable reception of cdma broadcast messages within the given message
+     * identifier range. Note that if two different clients enable the same
+     * message identifier, they must both disable it for the device to stop
+     * receiving those messages. All received messages will be broadcast in an
+     * intent with the action
+     * "android.provider.telephony.SMS_CB_RECEIVED". Note: This call
+     * is blocking, callers may want to avoid calling it from the main thread of
+     * an application.
+     *
+     * @param startMessageId Start Message identifier as specified in C.R1001-G
+     * @param endMessageId End Message identifier as specified in C.R1001-G
+     * @return true if successful, false otherwise
+     * @see #disableCdmaBroadcastRange(int, int)
+     *
+     * @throws IllegalArgumentException if endMessageId < startMessageId
+     * {@hide}
+     */
+    public boolean enableCdmaBroadcastRange(int startMessageId, int endMessageId) {
+        boolean success = false;
+
+        if (endMessageId < startMessageId) {
+            throw new IllegalArgumentException("endMessageId < startMessageId");
+        }
+        try {
+            ISms iccISms = ISms.Stub.asInterface(ServiceManager.getService("isms"));
+            if (iccISms != null) {
+                success = iccISms.enableCdmaBroadcastRange(startMessageId, endMessageId);
+            }
+        } catch (RemoteException ex) {
+            // ignore it
+        }
+
+        return success;
+    }
+
+    /**
+     * Disable reception of cdma broadcast messages within the given message
+     * identifier range. Note that if two different clients enable the same
+     * message identifier, they must both disable it for the device to stop
+     * receiving those messages. Note: This call is blocking, callers may want
+     * to avoid calling it from the main thread of an application.
+     *
+     * @param startMessageId Start Message identifier as specified in C.R1001-G
+     * @param endMessageId End Message identifier as specified in C.R1001-G
+     * @return true if successful, false otherwise
+     * @see #enableCdmaBroadcastRange(int, int)
+     *
+     * @throws IllegalArgumentException if endMessageId < startMessageId
+     * {@hide}
+     */
+    public boolean disableCdmaBroadcastRange(int startMessageId, int endMessageId) {
+        boolean success = false;
+
+        if (endMessageId < startMessageId) {
+            throw new IllegalArgumentException("endMessageId < startMessageId");
+        }
+        try {
+            ISms iccISms = ISms.Stub.asInterface(ServiceManager.getService("isms"));
+            if (iccISms != null) {
+                success = iccISms.disableCdmaBroadcastRange(startMessageId, endMessageId);
             }
         } catch (RemoteException ex) {
             // ignore it
@@ -486,6 +626,50 @@ public final class SmsManager {
             }
         }
         return messages;
+    }
+
+    /**
+     * SMS over IMS is supported if IMS is registered and SMS is supported
+     * on IMS.
+     *
+     * @return true if SMS over IMS is supported, false otherwise
+     *
+     * @see #getImsSmsFormat()
+     */
+    boolean isImsSmsSupported() {
+        boolean boSupported = false;
+        try {
+            ISms iccISms = ISms.Stub.asInterface(ServiceManager.getService("isms"));
+            if (iccISms != null) {
+                boSupported = iccISms.isImsSmsSupported();
+            }
+        } catch (RemoteException ex) {
+            // ignore it
+        }
+        return boSupported;
+    }
+
+    /**
+     * Gets SMS format supported on IMS.  SMS over IMS format is
+     * either 3GPP or 3GPP2.
+     *
+     * @return SmsMessage.FORMAT_3GPP,
+     *         SmsMessage.FORMAT_3GPP2
+     *      or SmsMessage.FORMAT_UNKNOWN
+     *
+     * @see #isImsSmsSupported()
+     */
+    String getImsSmsFormat() {
+        String format = SmsMessage.FORMAT_UNKNOWN;
+        try {
+            ISms iccISms = ISms.Stub.asInterface(ServiceManager.getService("isms"));
+            if (iccISms != null) {
+                format = iccISms.getImsSmsFormat();
+            }
+        } catch (RemoteException ex) {
+            // ignore it
+        }
+        return format;
     }
 
     // see SmsMessage.getStatusOnIcc

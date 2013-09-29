@@ -89,6 +89,11 @@ public class TelephonyManager {
         return (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
     }
 
+    /** @hide */
+    public static boolean isMultiSimEnabled() {
+        return false;
+    }
+
     //
     // Broadcast Intent actions
     //
@@ -473,17 +478,6 @@ public class TelephonyManager {
         }
     }
 
-    /**
-     * {@hide}
-     */
-    public void toggleLTE(boolean on) {
-        try {
-            getITelephony().toggleLTE(on);
-        } catch (RemoteException e) {
-            //Silently fail
-        }
-    }
-
     /** Unknown network class. {@hide} */
     public static final int NETWORK_CLASS_UNKNOWN = 0;
     /** Class of broadly defined "2G" networks. {@hide} */
@@ -594,6 +588,10 @@ public class TelephonyManager {
     public static final int SIM_STATE_NETWORK_LOCKED = 4;
     /** SIM card state: Ready */
     public static final int SIM_STATE_READY = 5;
+    /** SIM card state: SIM Card Error, Sim Card is present but faulty
+     *@hide
+     */
+    public static final int SIM_STATE_CARD_IO_ERROR = 6;
 
     /**
      * @return true if a ICC card is present
@@ -620,6 +618,7 @@ public class TelephonyManager {
      * @see #SIM_STATE_PUK_REQUIRED
      * @see #SIM_STATE_NETWORK_LOCKED
      * @see #SIM_STATE_READY
+     * @see #SIM_STATE_CARD_IO_ERROR
      */
     public int getSimState() {
         String prop = SystemProperties.get(TelephonyProperties.PROPERTY_SIM_STATE);
@@ -637,6 +636,9 @@ public class TelephonyManager {
         }
         else if ("READY".equals(prop)) {
             return SIM_STATE_READY;
+        }
+        else if ("CARD_IO_ERROR".equals(prop)) {
+            return SIM_STATE_CARD_IO_ERROR;
         }
         else {
             return SIM_STATE_UNKNOWN;
@@ -710,21 +712,6 @@ public class TelephonyManager {
         } catch (NullPointerException ex) {
             // This could happen before phone restarts due to crashing
             return Phone.LTE_ON_CDMA_UNKNOWN;
-        }
-    }
-
-    /**
-     * Return if the current radio is LTE on GSM
-     * @hide
-     */
-    public int getLteOnGsmMode() {
-        try {
-            return getITelephony().getLteOnGsmMode();
-        } catch (RemoteException ex) {
-            return 0;
-        } catch (NullPointerException ex) {
-            // This could happen before phone restarts due to crashing
-            return 0;
         }
     }
 
