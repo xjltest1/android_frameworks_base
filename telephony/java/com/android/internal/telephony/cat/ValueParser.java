@@ -17,8 +17,10 @@
 package com.android.internal.telephony.cat;
 
 import com.android.internal.telephony.GsmAlphabet;
-import com.android.internal.telephony.IccUtils;
 import com.android.internal.telephony.cat.Duration.TimeUnit;
+import com.android.internal.telephony.uicc.IccUtils;
+import com.android.internal.telephony.TelephonyProperties;
+import android.os.SystemProperties;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -285,10 +287,34 @@ abstract class ValueParser {
                     throw new ResultException(ResultCode.CMD_DATA_NOT_UNDERSTOOD);
                 }
             } else {
-                return CatService.STK_DEFAULT;
+                /*
+                 * NULL alpha identifier (length = 0)
+                 *
+                 * Alpha Identifier requirements for pro-active commands as
+                 * per 102.223 / 31.111, with NULL Alpha (len=0) ,
+                 * states that User Confirmation IS NOT required.
+                 * Hence do NOT return 'STK_DEFAULT' from here, instead return null
+                 */
+
+                CatLog.d("ValueParser", "NULL ALPHA id (length = 0) ");
+                return null;
             }
         } else {
-            return CatService.STK_DEFAULT;
+            /*
+             * No alpha identifier (ALPHA_ID) tag present in TLV.
+             *
+             * Per 3GPP specification 102.223,
+             * "if the alpha identifier is not provided by the UICC,
+             *  the terminal MAY give information to the user".
+             *
+             *  Configure the system property "persist.atel.noalpha.usrcnf"
+             *  to true to show default message
+             */
+            boolean alphaUsrCnf = SystemProperties.getBoolean(
+                    TelephonyProperties.PROPERTY_ALPHA_USRCNF, false);
+            CatLog.d("ValueParser",  "NO ALPHA id, " + "alphaUsrCnf: " + alphaUsrCnf);
+
+            return  alphaUsrCnf ? CatService.STK_DEFAULT : null;
         }
     }
 
@@ -337,72 +363,5 @@ abstract class ValueParser {
             // This should never happen.
             throw new ResultException(ResultCode.CMD_DATA_NOT_UNDERSTOOD);
         }
-    }
-
-    /**
-     * samsung part for converting byte[] to hexstring
-     * @param ctlv
-     * @return
-     * @throws ResultException
-     */
-    static String retrieveSMSCaddress(ComprehensionTlv ctlv)
-        throws ResultException {
-        byte[] rawValue = ctlv.getRawValue();
-        int valueIndex = ctlv.getValueIndex();
-        int length = ctlv.getLength();
-        byte[] outputValue = new byte[length + 1];
-
-        for (int k = 0; k <= length; k++) {
-            try {
-                outputValue[k] = rawValue[k + (valueIndex - 1)];
-            }
-            catch (IndexOutOfBoundsException indexoutofboundsexception) {
-                throw new ResultException(ResultCode.CMD_DATA_NOT_UNDERSTOOD);
-            }
-        }
-        if (length != 0)
-            return IccUtils.bytesToHexString(outputValue);
-        else
-            throw new ResultException(ResultCode.CMD_DATA_NOT_UNDERSTOOD);
-    }
-
-    /**
-     *
-     * @param ctlv
-     * @return
-     * @throws ResultException
-     */
-    static String retrieveSMSTPDU(ComprehensionTlv ctlv)
-            throws ResultException {
-        byte[] rawValue = ctlv.getRawValue();
-        int valueIndex = ctlv.getValueIndex();
-        int pduLength = ctlv.getLength();
-        byte[] outputValue;
-        int k;
-        String result;
-        if (rawValue[valueIndex + 2] % 2 == 0)
-            k = rawValue[valueIndex + 2] / 2;
-        else
-            k = (1 + rawValue[valueIndex + 2]) / 2;
-
-        if (pduLength == k + 6)
-            outputValue = new byte[pduLength + 1];
-        else
-            outputValue = new byte[pduLength];
-
-        for (int l = 0; l < pduLength; l++) {
-            try {
-                outputValue[l] = rawValue[valueIndex + l];
-            }
-            catch (IndexOutOfBoundsException ex) {
-                throw new ResultException(ResultCode.CMD_DATA_NOT_UNDERSTOOD);
-            }
-        }
-        if (pduLength != 0)
-            result = IccUtils.bytesToHexString(outputValue);
-        else
-            throw new ResultException(ResultCode.CMD_DATA_NOT_UNDERSTOOD);
-
-        return result;
     }
 }
