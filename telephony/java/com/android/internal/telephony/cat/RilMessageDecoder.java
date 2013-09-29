@@ -16,8 +16,8 @@
 
 package com.android.internal.telephony.cat;
 
-import com.android.internal.telephony.IccFileHandler;
-import com.android.internal.telephony.IccUtils;
+import com.android.internal.telephony.uicc.IccFileHandler;
+import com.android.internal.telephony.uicc.IccUtils;
 
 import android.os.Handler;
 import com.android.internal.util.State;
@@ -30,148 +30,169 @@ import android.os.Message;
  */
 class RilMessageDecoder extends StateMachine {
 
-    // constants
-    private static final int CMD_START = 1;
-    private static final int CMD_PARAMS_READY = 2;
+	// constants
+	private static final int CMD_START = 1;
+	private static final int CMD_PARAMS_READY = 2;
 
-    // members
-    private static RilMessageDecoder sInstance = null;
-    private CommandParamsFactory mCmdParamsFactory = null;
-    private RilMessage mCurrentRilMessage = null;
-    private Handler mCaller = null;
+	// members
+	private static RilMessageDecoder sInstance = null;
+	private CommandParamsFactory mCmdParamsFactory = null;
+	private RilMessage mCurrentRilMessage = null;
+	private Handler mCaller = null;
 
-    // States
-    private StateStart mStateStart = new StateStart();
-    private StateCmdParamsReady mStateCmdParamsReady = new StateCmdParamsReady();
+	// States
+	private StateStart mStateStart = new StateStart();
+	private StateCmdParamsReady mStateCmdParamsReady = new StateCmdParamsReady();
 
-    /**
-     * Get the singleton instance, constructing if necessary.
-     *
-     * @param caller
-     * @param fh
-     * @return RilMesssageDecoder
-     */
-    public static synchronized RilMessageDecoder getInstance(Handler caller, IccFileHandler fh) {
-        if (sInstance == null) {
-            sInstance = new RilMessageDecoder(caller, fh);
-            sInstance.start();
+	public static RilMessageDecoder getInstance(){
+        if (sInstance == null)
+        {
+          sInstance = new RilMessageDecoder();
+          sInstance.start();
         }
-        return sInstance;
+        RilMessageDecoder localRilMessageDecoder = sInstance;
+        return localRilMessageDecoder;
     }
 
-    /**
-     * Start decoding the message parameters,
-     * when complete MSG_ID_RIL_MSG_DECODED will be returned to caller.
-     *
-     * @param rilMsg
-     */
-    public void sendStartDecodingMessageParams(RilMessage rilMsg) {
-        Message msg = obtainMessage(CMD_START);
-        msg.obj = rilMsg;
-        sendMessage(msg);
-    }
+	/**
+	 * Get the singleton instance, constructing if necessary.
+	 * 
+	 * @param caller
+	 * @param fh
+	 * @return RilMesssageDecoder
+	 */
+	public static synchronized RilMessageDecoder getInstance(Handler caller,
+			IccFileHandler fh) {
+		if (sInstance == null) {
+			sInstance = new RilMessageDecoder(caller, fh);
+			sInstance.start();
+		}
+		return sInstance;
+	}
 
-    /**
-     * The command parameters have been decoded.
-     *
-     * @param resCode
-     * @param cmdParams
-     */
-    public void sendMsgParamsDecoded(ResultCode resCode, CommandParams cmdParams) {
-        Message msg = obtainMessage(RilMessageDecoder.CMD_PARAMS_READY);
-        msg.arg1 = resCode.value();
-        msg.obj = cmdParams;
-        sendMessage(msg);
-    }
+	/**
+	 * Start decoding the message parameters, when complete
+	 * MSG_ID_RIL_MSG_DECODED will be returned to caller.
+	 * 
+	 * @param rilMsg
+	 */
+	public void sendStartDecodingMessageParams(RilMessage rilMsg) {
+		Message msg = obtainMessage(CMD_START);
+		msg.obj = rilMsg;
+		sendMessage(msg);
+	}
 
-    private void sendCmdForExecution(RilMessage rilMsg) {
-        Message msg = mCaller.obtainMessage(CatService.MSG_ID_RIL_MSG_DECODED,
-                new RilMessage(rilMsg));
-        msg.sendToTarget();
-    }
+	/**
+	 * The command parameters have been decoded.
+	 * 
+	 * @param resCode
+	 * @param cmdParams
+	 */
+	public void sendMsgParamsDecoded(ResultCode resCode, CommandParams cmdParams) {
+		Message msg = obtainMessage(RilMessageDecoder.CMD_PARAMS_READY);
+		msg.arg1 = resCode.value();
+		msg.obj = cmdParams;
+		sendMessage(msg);
+	}
 
-    private RilMessageDecoder(Handler caller, IccFileHandler fh) {
-        super("RilMessageDecoder");
+	private void sendCmdForExecution(RilMessage rilMsg) {
+		Message msg = mCaller.obtainMessage(CatService.MSG_ID_RIL_MSG_DECODED,
+				new RilMessage(rilMsg));
+		msg.sendToTarget();
+	}
 
-        addState(mStateStart);
-        addState(mStateCmdParamsReady);
-        setInitialState(mStateStart);
+	private RilMessageDecoder() {
+		super("RilMessageDecoder");
+		addState(this.mStateStart);
+	    addState(this.mStateCmdParamsReady);
+	    setInitialState(this.mStateStart);
+	    this.mCmdParamsFactory = CommandParamsFactory.getInstance(this);
+	}
+	
+	private RilMessageDecoder(Handler caller, IccFileHandler fh) {
+		super("RilMessageDecoder");
 
-        mCaller = caller;
-        mCmdParamsFactory = CommandParamsFactory.getInstance(this, fh);
-    }
+		addState(mStateStart);
+		addState(mStateCmdParamsReady);
+		setInitialState(mStateStart);
 
-    private class StateStart extends State {
-        @Override
-        public boolean processMessage(Message msg) {
-            if (msg.what == CMD_START) {
-                if (decodeMessageParams((RilMessage)msg.obj)) {
-                    transitionTo(mStateCmdParamsReady);
-                }
-            } else {
-                CatLog.d(this, "StateStart unexpected expecting START=" +
-                         CMD_START + " got " + msg.what);
-            }
-            return true;
-        }
-    }
+		mCaller = caller;
+		mCmdParamsFactory = CommandParamsFactory.getInstance(this, fh);
+	}
 
-    private class StateCmdParamsReady extends State {
-        @Override
-        public boolean processMessage(Message msg) {
-            if (msg.what == CMD_PARAMS_READY) {
-                mCurrentRilMessage.mResCode = ResultCode.fromInt(msg.arg1);
-                mCurrentRilMessage.mData = msg.obj;
-                sendCmdForExecution(mCurrentRilMessage);
-                transitionTo(mStateStart);
-            } else {
-                CatLog.d(this, "StateCmdParamsReady expecting CMD_PARAMS_READY="
-                         + CMD_PARAMS_READY + " got " + msg.what);
-                deferMessage(msg);
-            }
-            return true;
-        }
-    }
+	private class StateStart extends State {
+		@Override
+		public boolean processMessage(Message msg) {
+			if (msg.what == CMD_START) {
+				if (decodeMessageParams((RilMessage) msg.obj)) {
+					transitionTo(mStateCmdParamsReady);
+				}
+			} else {
+				CatLog.d(this, "StateStart unexpected expecting START="
+						+ CMD_START + " got " + msg.what);
+			}
+			return true;
+		}
+	}
 
-    private boolean decodeMessageParams(RilMessage rilMsg) {
-        boolean decodingStarted;
+	private class StateCmdParamsReady extends State {
+		@Override
+		public boolean processMessage(Message msg) {
+			if (msg.what == CMD_PARAMS_READY) {
+				mCurrentRilMessage.mResCode = ResultCode.fromInt(msg.arg1);
+				mCurrentRilMessage.mData = msg.obj;
+				sendCmdForExecution(mCurrentRilMessage);
+				transitionTo(mStateStart);
+			} else {
+				CatLog.d(this,
+						"StateCmdParamsReady expecting CMD_PARAMS_READY="
+								+ CMD_PARAMS_READY + " got " + msg.what);
+				deferMessage(msg);
+			}
+			return true;
+		}
+	}
 
-        mCurrentRilMessage = rilMsg;
-        switch(rilMsg.mId) {
-        case CatService.MSG_ID_SESSION_END:
-        case CatService.MSG_ID_CALL_SETUP:
-            mCurrentRilMessage.mResCode = ResultCode.OK;
-            sendCmdForExecution(mCurrentRilMessage);
-            decodingStarted = false;
-            break;
-        case CatService.MSG_ID_PROACTIVE_COMMAND:
-        case CatService.MSG_ID_EVENT_NOTIFY:
-        case CatService.MSG_ID_REFRESH:
-            byte[] rawData = null;
-            try {
-                rawData = IccUtils.hexStringToBytes((String) rilMsg.mData);
-            } catch (Exception e) {
-                // zombie messages are dropped
-                CatLog.d(this, "decodeMessageParams dropping zombie messages");
-                decodingStarted = false;
-                break;
-            }
-            try {
-                // Start asynch parsing of the command parameters.
-                mCmdParamsFactory.make(BerTlv.decode(rawData));
-                decodingStarted = true;
-            } catch (ResultException e) {
-                // send to Service for proper RIL communication.
-                CatLog.d(this, "decodeMessageParams: caught ResultException e=" + e);
-                mCurrentRilMessage.mResCode = e.result();
-                sendCmdForExecution(mCurrentRilMessage);
-                decodingStarted = false;
-            }
-            break;
-        default:
-            decodingStarted = false;
-            break;
-        }
-        return decodingStarted;
-    }
+	private boolean decodeMessageParams(RilMessage rilMsg) {
+		boolean decodingStarted;
+
+		mCurrentRilMessage = rilMsg;
+		switch (rilMsg.mId) {
+		case CatService.MSG_ID_SESSION_END:
+		case CatService.MSG_ID_CALL_SETUP:
+			mCurrentRilMessage.mResCode = ResultCode.OK;
+			sendCmdForExecution(mCurrentRilMessage);
+			decodingStarted = false;
+			break;
+		case CatService.MSG_ID_PROACTIVE_COMMAND:
+		case CatService.MSG_ID_EVENT_NOTIFY:
+		case CatService.MSG_ID_REFRESH:
+			byte[] rawData = null;
+			try {
+				rawData = IccUtils.hexStringToBytes((String) rilMsg.mData);
+			} catch (Exception e) {
+				// zombie messages are dropped
+				CatLog.d(this, "decodeMessageParams dropping zombie messages");
+				decodingStarted = false;
+				break;
+			}
+			try {
+				// Start asynch parsing of the command parameters.
+				mCmdParamsFactory.make(BerTlv.decode(rawData));
+				decodingStarted = true;
+			} catch (ResultException e) {
+				// send to Service for proper RIL communication.
+				CatLog.d(this, "decodeMessageParams: caught ResultException e="
+						+ e);
+				mCurrentRilMessage.mResCode = e.result();
+				sendCmdForExecution(mCurrentRilMessage);
+				decodingStarted = false;
+			}
+			break;
+		default:
+			decodingStarted = false;
+			break;
+		}
+		return decodingStarted;
+	}
 }
