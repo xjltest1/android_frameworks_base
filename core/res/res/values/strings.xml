@@ -114,6 +114,30 @@
          the SIM card. -->
     <string name="needPuk">Your SIM card is PUK-locked. Type the PUK code to unlock it.</string>
     <string name="needPuk2">Type PUK2 to unblock SIM card.</string>
+    <!-- start -->
+    <!-- Displayed when user attempts to change SIM PIN1 without enabling PIN1. -->
+    <string name="enablePin">Unsuccessful. Enable SIM/RUIM LOCK.</string>
+    <!-- Shown in "Managed Roaming" dialog when registration is denied with rejCode 10. -->
+    <string name="managed_roaming_title">Managed Roaming</string>
+    <string name="managed_roaming_dialog_content">Network with Limited Service found. Do you want to initiate a Network Search?</string>
+    <string name="managed_roaming_dialog_ok_button">Yes</string>
+    <string name="managed_roaming_dialog_cancel_button">No</string>
+       <!-- Displayed when the user dialed an unsupported MMI code. -->
+    <string name="unsupportedMmiCode">Dialed MMI Code is not supported."</string>
+     <!-- Displayed when the USSD/SS request is modified by STK CC to a
+         different request. This will be displayed in a toast. -->
+    <string name="stkCcUssdToDial">USSD request is modified to DIAL request.</string>
+    <string name="stkCcUssdToSs">USSD request is modified to SS request.</string>
+    <string name="stkCcUssdToUssd">USSD request is modified to new USSD request.</string>
+    <string name="stkCcSsToDial">SS request is modified to DIAL request.</string>
+    
+    <string name="stkCcSsToUssd">SS request is modified to USSD request.</string>
+    <string name="stkCcSsToSs">SS request is modified to new SS request.</string>
+    
+       <!-- Displayed when a SIM PIN/PUK is entered incorrectly. -->
+    <string name="pinpuk_attempts">\nAttempts Remaining :</string>
+    
+    <!-- end -->
     <!-- Title for the dialog used to display the user's IMEI number [CHAR LIMIT=10] -->
     <string name="imei">IMEI</string>
 

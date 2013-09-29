@@ -3941,4 +3941,20 @@
 
   <!-- Stylus gestures -->
   <java-symbol type="bool" name="config_stylusGestures" />
+
+  <java-symbol type="string" name="enablePin" />
+  <java-symbol type="string" name="managed_roaming_title" />
+  <java-symbol type="string" name="managed_roaming_dialog_content" />
+  <java-symbol type="string" name="managed_roaming_dialog_ok_button" />
+  <java-symbol type="string" name="managed_roaming_dialog_cancel_button" />
+  <java-symbol type="string" name="unsupportedMmiCode" />
+  <java-symbol type="string" name="stkCcUssdToDial" />
+  <java-symbol type="string" name="stkCcSsToDial" />
+   <java-symbol type="string" name="stkCcUssdToSs" />
+   <java-symbol type="string" name="stkCcUssdToUssd" />
+   <java-symbol type="string" name="stkCcSsToUssd" />
+   <java-symbol type="string" name="stkCcSsToSs" />
+   <java-symbol type="string" name="pinpuk_attempts" />
+   
+   <java-symbol type="bool" name="skip_radio_power_off_on_sim_refresh_reset" />
 </resources>
