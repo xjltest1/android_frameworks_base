@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2010 The Android Open Source Project
+ * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +17,8 @@
 
 package com.android.internal.telephony.sip;
 
+import java.util.ArrayList;
+
 import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
@@ -23,6 +26,7 @@ import android.os.Message;
 import com.android.internal.telephony.BaseCommands;
 import com.android.internal.telephony.CommandsInterface;
 import com.android.internal.telephony.UUSInfo;
+import com.android.internal.telephony.cdma.CdmaSmsBroadcastConfigInfo;
 import com.android.internal.telephony.gsm.SmsBroadcastConfigInfo;
 
 /**
@@ -175,6 +179,17 @@ class SipCommandInterface extends BaseCommands implements CommandsInterface {
     public void sendCdmaSms(byte[] pdu, Message result) {
     }
 
+    public void sendImsGsmSms (String smscPDU, String pdu,
+            int retry, int messageRef, Message response) {
+    }
+
+    public void sendImsCdmaSms(byte[] pdu, int retry, int messageRef,
+            Message response) {
+    }
+
+    public void getImsRegistrationState (Message result) {
+    }
+
     public void deleteSmsOnSim(int index, Message response) {
     }
 
@@ -190,6 +205,24 @@ class SipCommandInterface extends BaseCommands implements CommandsInterface {
     public void setupDataCall(String radioTechnology, String profile,
             String apn, String user, String password, String authType,
             String protocol, Message result) {
+    }
+
+    public void setupQosReq (int callId, ArrayList<String> qosFlows, Message result) {
+    }
+
+    public void releaseQos (int qosId, Message result) {
+    }
+
+    public void modifyQos (int qosId, ArrayList<String> qosFlows, Message result) {
+    }
+
+    public void suspendQos (int qosId, Message result) {
+    }
+
+    public void resumeQos (int qosId, Message result) {
+    }
+
+    public void getQosStatus (int qosId, Message result) {
     }
 
     public void deactivateDataCall(int cid, int reason, Message result) {
@@ -385,6 +418,9 @@ class SipCommandInterface extends BaseCommands implements CommandsInterface {
     public void setCdmaBroadcastConfig(int[] configValuesArray, Message response) {
     }
 
+    public void setCdmaBroadcastConfig(CdmaSmsBroadcastConfigInfo[] configs, Message response) {
+    }
+
     public void setCdmaBroadcastActivation(boolean activate, Message response) {
     }
 
@@ -422,16 +458,40 @@ class SipCommandInterface extends BaseCommands implements CommandsInterface {
     public void getVoiceRadioTechnology(Message result) {
     }
 
-    public boolean needsOldRilFeature(String feature) { return false; }
-    /**
-     * added samsung part to command interface
-     * @param h
-     * @param what
-     * @param obj
-     */
-    public void setOnCatSendSmsResult(Handler h, int what, Object obj) {
+    public void getDataCallProfile(int appType, Message result) {
     }
 
-    public void unSetOnCatSendSmsResult(Handler h) {
+    public void setSubscriptionMode(int subscriptionMode, Message response) {
     }
+
+    public void setUiccSubscription(int slotId, int appIndex, int subId, int subStatus,
+            Message response) {
+    }
+
+    public void setDataSubscription(Message response) {
+    }
+
+	@Override
+	public int getLteOnGsmMode() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public boolean needsOldRilFeature(String feature) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void setOnCatSendSmsResult(Handler h, int what, Object obj) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void unSetOnCatSendSmsResult(Handler h) {
+		// TODO Auto-generated method stub
+		
+	}
 }
